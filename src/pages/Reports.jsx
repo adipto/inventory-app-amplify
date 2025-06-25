@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "react-oidc-context";
+import { getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
 import {
     LineChart,
     Line,
@@ -97,7 +97,7 @@ const SummaryStats = ({ monthlySummary }) => {
 };
 
 function EnhancedReportsPage() {
-    const auth = useAuth();
+    const [user, setUser] = useState(null);
     const [dailySales, setDailySales] = useState([]);
     const [monthlySummary, setMonthlySummary] = useState([]);
     const [topProducts, setTopProducts] = useState([]);
@@ -106,23 +106,50 @@ function EnhancedReportsPage() {
     const [cumulativeProfit, setCumulativeProfit] = useState([]);
     const [transactionsByDay, setTransactionsByDay] = useState([]);
     const [salesByProductType, setSalesByProductType] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const checkUser = async () => {
+            try {
+                const currentUser = await getCurrentUser();
+                setUser(currentUser);
+            } catch (error) {
+                console.error('No authenticated user:', error);
+                setUser(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        checkUser();
+    }, []);
 
     useEffect(() => {
         const loadReports = async () => {
-            if (!auth.user) return;
-            const idToken = auth.user.id_token;
-            const data = await fetchTransactionReports(idToken);
-            setDailySales(data.dailySales);
-            setMonthlySummary(data.monthlySummary);
-            setTopProducts(data.topProducts);
-            setProfitByCategory(data.profitByCategory);
-            setProfitByType(data.profitByType);
-            setCumulativeProfit(data.cumulativeProfit);
-            setTransactionsByDay(data.transactionsByDay);
-            setSalesByProductType(data.salesByProductType);
+            if (!user) return;
+
+            try {
+                const session = await fetchAuthSession();
+                const idToken = session.tokens?.idToken?.toString();
+
+                if (idToken) {
+                    const data = await fetchTransactionReports(idToken);
+                    setDailySales(data.dailySales);
+                    setMonthlySummary(data.monthlySummary);
+                    setTopProducts(data.topProducts);
+                    setProfitByCategory(data.profitByCategory);
+                    setProfitByType(data.profitByType);
+                    setCumulativeProfit(data.cumulativeProfit);
+                    setTransactionsByDay(data.transactionsByDay);
+                    setSalesByProductType(data.salesByProductType);
+                }
+            } catch (error) {
+                console.error('Error loading reports:', error);
+            }
         };
+
         loadReports();
-    }, [auth.user]);
+    }, [user]);
 
     // Custom label function for pie charts
     const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
@@ -144,6 +171,22 @@ function EnhancedReportsPage() {
             </text>
         );
     };
+
+    if (loading) {
+        return (
+            <div className="flex h-screen bg-gray-50 items-center justify-center">
+                <div className="text-lg">Loading...</div>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="flex h-screen bg-gray-50 items-center justify-center">
+                <div className="text-lg">Please sign in to view reports.</div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-screen bg-gray-50">
