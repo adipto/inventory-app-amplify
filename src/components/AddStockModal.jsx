@@ -35,11 +35,18 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         "Folio Paper": ["Folio_6"]
     };
 
-    // Helper function to get auth token
+    // Helper function to get auth token using AWS Amplify
     const getAuthToken = async () => {
         try {
             const session = await fetchAuthSession();
-            return session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+            const idToken = session.tokens?.idToken?.toString();
+            const accessToken = session.tokens?.accessToken?.toString();
+
+            if (!idToken && !accessToken) {
+                throw new Error("No valid authentication token found. Please log in again.");
+            }
+
+            return idToken || accessToken;
         } catch (error) {
             console.error("Error fetching auth session:", error);
             throw new Error("Authentication failed. Please log in again.");
@@ -97,10 +104,6 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         try {
             // Get auth token using AWS Amplify
             const idToken = await getAuthToken();
-            if (!idToken) {
-                throw new Error("No valid authentication token found");
-            }
-
             const dynamoClient = createDynamoDBClient(idToken);
 
             const finalVariation = isCustomVariation ? customVariation : variation;
@@ -123,15 +126,18 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                         originalItem.variation !== finalVariation ||
                         originalItem.stockType !== stockType
                     ) {
+                        // Determine the correct table for the original item
+                        const originalTableName = originalItem.stockType === "Retail" ? "Retail_Stock" : "Wholesale_Stock";
+
                         // Delete the old item
-                        const deleteCommand = {
-                            TableName: tableName,
+                        const deleteCommand = new DeleteItemCommand({
+                            TableName: originalTableName,
                             Key: {
                                 ItemType: { S: originalItem.itemType },
                                 VariationName: { S: originalItem.variation }
                             }
-                        };
-                        await dynamoClient.send(new DeleteItemCommand(deleteCommand));
+                        });
+                        await dynamoClient.send(deleteCommand);
 
                         // Create a new item
                         await createOrUpdateItem(
@@ -187,7 +193,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                     false
                 );
 
-                alert(isEdit ? "Stock item updated successfully" : "Stock item added successfully");
+                alert("Stock item added successfully");
             }
 
             if (onStockAdded) {
@@ -197,7 +203,15 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             onClose();
         } catch (err) {
             console.error("Error managing stock:", err);
-            alert(err.message || "Error saving item. Please try again.");
+
+            // Handle authentication errors specifically
+            if (err.message.includes("authentication") || err.message.includes("token")) {
+                alert("Authentication error. Please log in again.");
+                // Optionally redirect to login
+                window.location.href = "/";
+            } else {
+                alert(err.message || "Error saving item. Please try again.");
+            }
         } finally {
             setIsLoading(false);
         }
@@ -224,28 +238,33 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                 }
             };
 
-            const existingItem = await client.send(new GetItemCommand(getItemParams));
+            try {
+                const existingItem = await client.send(new GetItemCommand(getItemParams));
 
-            if (existingItem.Item) {
-                // Item exists, update the quantity
-                const currentQuantity = Number(existingItem.Item[quantityField].N);
-                const newQuantity = isEdit ? quantity : currentQuantity + quantity;
+                if (existingItem.Item) {
+                    // Item exists, update the quantity
+                    const currentQuantity = Number(existingItem.Item[quantityField]?.N || 0);
+                    const newQuantity = isEdit ? quantity : currentQuantity + quantity;
 
-                const updateCommand = new UpdateItemCommand({
-                    TableName: tableName,
-                    Key: {
-                        ItemType: { S: itemType },
-                        VariationName: { S: variationName }
-                    },
-                    UpdateExpression: `SET ${quantityField} = :q, LowStockThreshold = :lst`,
-                    ExpressionAttributeValues: {
-                        ":q": { N: newQuantity.toString() },
-                        ":lst": { N: lowStockThreshold.toString() }
-                    }
-                });
+                    const updateCommand = new UpdateItemCommand({
+                        TableName: tableName,
+                        Key: {
+                            ItemType: { S: itemType },
+                            VariationName: { S: variationName }
+                        },
+                        UpdateExpression: `SET ${quantityField} = :q, LowStockThreshold = :lst`,
+                        ExpressionAttributeValues: {
+                            ":q": { N: newQuantity.toString() },
+                            ":lst": { N: lowStockThreshold.toString() }
+                        }
+                    });
 
-                await client.send(updateCommand);
-                return;
+                    await client.send(updateCommand);
+                    return;
+                }
+            } catch (error) {
+                console.error("Error checking existing item:", error);
+                // Continue to create new item if check fails
             }
         }
 
@@ -336,7 +355,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                                 setVariation("");
                                             }}
                                             className="w-full border p-2 rounded"
-                                            disabled={isLoading || (isEdit && originalItem?.stockType !== stockType)}
+                                            disabled={isLoading}
                                         >
                                             {Object.keys(predefinedVariations).map((type) => (
                                                 <option key={type} value={type}>
@@ -353,7 +372,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                             value={variation}
                                             onChange={(e) => setVariation(e.target.value)}
                                             className="w-full border p-2 rounded"
-                                            disabled={isLoading || (isEdit && originalItem?.stockType !== stockType)}
+                                            disabled={isLoading}
                                         >
                                             <option value="">Select a variation</option>
                                             {predefinedVariations[itemType].map((v) => (
@@ -391,7 +410,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                             value={stockType}
                                             onChange={(e) => setStockType(e.target.value)}
                                             className="w-full border p-2 rounded"
-                                            disabled={isLoading || (isEdit && originalItem?.stockType !== stockType)}
+                                            disabled={isLoading}
                                         >
                                             <option value="Retail">Retail</option>
                                             <option value="Wholesale">Wholesale</option>
@@ -443,7 +462,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                     {/* Submit */}
                                     <button
                                         type="submit"
-                                        className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition"
+                                        className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                         disabled={isLoading}
                                     >
                                         {isLoading ? (

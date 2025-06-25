@@ -1,11 +1,12 @@
 // src/pages/StockPage.jsx
 import React, { useState, useEffect } from "react";
+import { fetchAuthSession, signOut } from "aws-amplify/auth";
+import { Hub } from "aws-amplify/utils";
 import Sidebar from "../components/Sidebar";
 import AddStockModal from "../components/AddStockModal";
 import PageHeader from "../components/PageHeader";
 import DeleteConfirmModal from "../utils/DeleteConfirmModal";
 import { fetchStock, deleteStockItem } from "../utils/stockService";
-import { useAuth } from "react-oidc-context";
 import {
   LogOut, Plus, Search, Filter, ArrowUpDown,
   Download, MoreVertical, Edit, Trash, Package, AlertCircle,
@@ -13,7 +14,6 @@ import {
 } from "lucide-react";
 
 function StockPage() {
-  const auth = useAuth();
   const [activeTab, setActiveTab] = useState("retail");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: "itemType", direction: "ascending" });
@@ -27,29 +27,78 @@ function StockPage() {
   const [error, setError] = useState(null);
   const [itemToEdit, setItemToEdit] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  if (auth.isLoading) return <div className="p-4 text-gray-500">Loading authentication...</div>;
+  // Check authentication status
+  const checkAuthStatus = async () => {
+    try {
+      const session = await fetchAuthSession();
+      const authenticated = !!(session.tokens?.idToken || session.tokens?.accessToken);
+      setIsAuthenticated(authenticated);
 
-  if (!auth.isAuthenticated) {
-    // Redirect unauthenticated users
-    window.location.href = "http://localhost:5173";
-    return null;
-  }
+      if (!authenticated) {
+        // Redirect to login page or show login component
+        window.location.href = "/"; // Adjust this to your login route
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      setIsAuthenticated(false);
+      window.location.href = "/"; // Redirect to login
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
-  // Fetch stock data on component mount and when active tab changes
+  // Listen for auth events
+  // Listen for auth events - FIXED VERSION
   useEffect(() => {
-    if (!auth.isAuthenticated) {
-      window.location.href = "http://localhost:5173";
-    } else {
+    const hubListener = (data) => {
+      const { event } = data.payload;
+      if (event === 'signedOut') {
+        setIsAuthenticated(false);
+        window.location.href = "/";
+      }
+    };
+
+    // Hub.listen returns an unsubscribe function
+    const unsubscribe = Hub.listen('auth', hubListener);
+
+    // Return the unsubscribe function to clean up
+    return unsubscribe;
+  }, []);
+
+  // Initial auth check and data fetch
+  useEffect(() => {
+    const initializeApp = async () => {
+      const authenticated = await checkAuthStatus();
+      if (authenticated) {
+        await fetchData();
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  // Fetch data when active tab changes
+  useEffect(() => {
+    if (isAuthenticated && !authLoading) {
       fetchData();
     }
-  }, [auth.isAuthenticated, activeTab]);
-
+  }, [activeTab, isAuthenticated, authLoading]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const idToken = auth.user?.id_token || auth.user?.access_token;
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+
+      if (!idToken) {
+        throw new Error("No valid authentication token found");
+      }
 
       // Fetch retail stock data
       const retailData = await fetchStock("Retail_Stock", idToken);
@@ -63,10 +112,41 @@ function StockPage() {
     } catch (err) {
       console.error("Error fetching stock data:", err);
       setError("Failed to load stock data. Please try again later.");
+
+      // If auth error, redirect to login
+      if (err.message.includes("authentication") || err.message.includes("token")) {
+        setIsAuthenticated(false);
+        window.location.href = "/";
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setIsAuthenticated(false);
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700"></div>
+        <span className="ml-3 text-gray-700">Checking authentication...</span>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   // Get current stock based on active tab
   const currentStock = activeTab === "retail" ? retailStock : wholesaleStock;
@@ -140,7 +220,8 @@ function StockPage() {
 
     try {
       setIsLoading(true);
-      const idToken = auth.user?.id_token || auth.user?.access_token;
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
 
       await deleteStockItem(
         currentTableName,
@@ -202,15 +283,6 @@ function StockPage() {
       <Sidebar />
 
       <div className="flex-1 overflow-auto">
-        {/* <header className="sticky top-0 z-10 bg-white border-b px-6 py-4 shadow-sm">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-800">Stock Management</h1>
-            <button className="flex items-center px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors">
-              <LogOut size={16} className="mr-2" />
-              <span>Log out</span>
-            </button>
-          </div>
-        </header> */}
         <PageHeader />
         <main className="p-6 max-w-7xl mx-auto">
           {/* Tabs & Actions */}
@@ -302,7 +374,6 @@ function StockPage() {
 
             </div>
           </div>
-
 
           {/* Error message */}
           {error && (
