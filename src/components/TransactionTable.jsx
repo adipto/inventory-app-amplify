@@ -1,15 +1,27 @@
 // src/components/TransactionTable.jsx
-import React, { useState, useEffect, useCallback } from "react";
-import { Clipboard, PlusCircle, ChevronDown, Search, Edit, Trash2 } from "lucide-react";
-import { getCurrentUser, signOut, fetchAuthSession } from 'aws-amplify/auth';
-import { Hub } from 'aws-amplify/utils';
-import AddTransactionModal from "./AddTransactionModal";
-import DeleteConfirmModal from "../utils/DeleteConfirmModal";
-import { fetchRetailTransactions, fetchWholesaleTransactions, fetchCustomerDetails } from "../api/fetchTransactions";
-import { format } from "date-fns";
-import { DynamoDBClient, DeleteItemCommand } from "@aws-sdk/client-dynamodb";
+import { DeleteItemCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
-
+import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
+import { Hub } from "aws-amplify/utils";
+import { format } from "date-fns";
+import {
+  ChevronDown,
+  Clipboard,
+  Edit,
+  PlusCircle,
+  Search,
+  Trash2,
+} from "lucide-react";
+import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  fetchCustomerDetails,
+  fetchRetailTransactions,
+  fetchWholesaleTransactions,
+} from "../api/fetchTransactions";
+import DeleteConfirmModal from "../utils/DeleteConfirmModal";
+import AddTransactionModal from "./AddTransactionModal";
+const preserveReact = React;
 
 function TransactionTable({ initialTransactionType }) {
   const [user, setUser] = useState(null);
@@ -22,7 +34,9 @@ function TransactionTable({ initialTransactionType }) {
   const [retailTransactions, setRetailTransactions] = useState([]);
   const [wholesaleTransactions, setWholesaleTransactions] = useState([]);
   const [customerDetails, setCustomerDetails] = useState({});
-  const [transactionType, setTransactionType] = useState(initialTransactionType || "all");
+  const [transactionType, setTransactionType] = useState(
+    initialTransactionType || "all"
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
@@ -43,7 +57,7 @@ function TransactionTable({ initialTransactionType }) {
       setUser(currentUser);
       setIsAuthenticated(true);
     } catch (error) {
-      console.log('User not authenticated:', error);
+      console.log("User not authenticated:", error);
       setUser(null);
       setIsAuthenticated(false);
     } finally {
@@ -57,7 +71,7 @@ function TransactionTable({ initialTransactionType }) {
       const session = await fetchAuthSession();
       return session.tokens?.idToken?.toString();
     } catch (error) {
-      console.error('Error getting ID token:', error);
+      console.error("Error getting ID token:", error);
       return null;
     }
   }, []);
@@ -66,19 +80,21 @@ function TransactionTable({ initialTransactionType }) {
   const createDynamoDBClient = useCallback(async () => {
     try {
       const idToken = await getIdToken();
-      if (!idToken) throw new Error('No ID token available');
+      if (!idToken) throw new Error("No ID token available");
 
       return new DynamoDBClient({
         region: REGION,
         credentials: fromCognitoIdentityPool({
           identityPoolId: IDENTITY_POOL_ID,
           logins: {
-            [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: idToken,
+            [`cognito-idp.${REGION}.amazonaws.com/${
+              import.meta.env.VITE_COGNITO_USER_POOL_ID
+            }`]: idToken,
           },
         }),
       });
     } catch (error) {
-      console.error('Error creating DynamoDB client:', error);
+      console.error("Error creating DynamoDB client:", error);
       throw error;
     }
   }, [getIdToken]);
@@ -87,12 +103,13 @@ function TransactionTable({ initialTransactionType }) {
   const checkAdminStatus = useCallback(async () => {
     try {
       const session = await fetchAuthSession();
-      const groups = session.tokens?.accessToken?.payload?.['cognito:groups'] || [];
-      const adminGroups = ['admin', 'Admin', 'ADMIN']; // Add your admin group names here
-      const userIsAdmin = groups.some(group => adminGroups.includes(group));
+      const groups =
+        session.tokens?.accessToken?.payload?.["cognito:groups"] || [];
+      const adminGroups = ["admin", "Admin", "ADMIN"]; // Add your admin group names here
+      const userIsAdmin = groups.some((group) => adminGroups.includes(group));
       setIsAdmin(userIsAdmin);
     } catch (error) {
-      console.error('Error checking admin status:', error);
+      console.error("Error checking admin status:", error);
       setIsAdmin(false);
     }
   }, []);
@@ -105,7 +122,7 @@ function TransactionTable({ initialTransactionType }) {
     try {
       const idToken = await getIdToken();
       if (!idToken) {
-        console.error('No ID token available for fetching data');
+        console.error("No ID token available for fetching data");
         return;
       }
 
@@ -121,9 +138,9 @@ function TransactionTable({ initialTransactionType }) {
       // Get all unique customer IDs
       const allCustomerIds = [
         ...new Set([
-          ...retailData.map(item => item.CustomerID),
-          ...wholesaleData.map(item => item.CustomerID)
-        ])
+          ...retailData.map((item) => item.CustomerID),
+          ...wholesaleData.map((item) => item.CustomerID),
+        ]),
       ];
 
       // Fetch customer details
@@ -142,24 +159,24 @@ function TransactionTable({ initialTransactionType }) {
     checkAuthStatus();
 
     // Listen for auth state changes
-    const unsubscribe = Hub.listen('auth', (data) => {
+    const unsubscribe = Hub.listen("auth", (data) => {
       const { event } = data.payload;
 
       switch (event) {
-        case 'signedIn':
-          console.log('User signed in');
+        case "signedIn":
+          console.log("User signed in");
           checkAuthStatus();
           break;
-        case 'signedOut':
-          console.log('User signed out');
+        case "signedOut":
+          console.log("User signed out");
           setUser(null);
           setIsAuthenticated(false);
           break;
-        case 'tokenRefresh':
-          console.log('Token refreshed');
+        case "tokenRefresh":
+          console.log("Token refreshed");
           break;
-        case 'tokenRefresh_failure':
-          console.log('Token refresh failed');
+        case "tokenRefresh_failure":
+          console.log("Token refresh failed");
           setUser(null);
           setIsAuthenticated(false);
           break;
@@ -212,23 +229,23 @@ function TransactionTable({ initialTransactionType }) {
     let filteredTransactions = [];
 
     if (transactionType === "all" || transactionType === "retail") {
-      const processedRetail = retailTransactions.map(tx => ({
+      const processedRetail = retailTransactions.map((tx) => ({
         ...tx,
         type: "retail",
         quantity: tx.Quantity_Pcs,
         sellingPrice: tx.SellingPrice_Per_Pc,
-        cogs: tx.COGS_Per_Pc
+        cogs: tx.COGS_Per_Pc,
       }));
       filteredTransactions = [...filteredTransactions, ...processedRetail];
     }
 
     if (transactionType === "all" || transactionType === "wholesale") {
-      const processedWholesale = wholesaleTransactions.map(tx => ({
+      const processedWholesale = wholesaleTransactions.map((tx) => ({
         ...tx,
         type: "wholesale",
         quantity: tx.Quantity_Packets,
         sellingPrice: tx.SellingPrice_Per_Packet,
-        cogs: tx.COGS_Per_Packet
+        cogs: tx.COGS_Per_Packet,
       }));
       filteredTransactions = [...filteredTransactions, ...processedWholesale];
     }
@@ -236,7 +253,7 @@ function TransactionTable({ initialTransactionType }) {
     // Apply search filtering
     if (searchTerm) {
       const searchTermLower = searchTerm.toLowerCase();
-      filteredTransactions = filteredTransactions.filter(transaction => {
+      filteredTransactions = filteredTransactions.filter((transaction) => {
         const customer = customerDetails[transaction.CustomerID];
         if (!customer) return false;
 
@@ -258,7 +275,13 @@ function TransactionTable({ initialTransactionType }) {
     return filteredTransactions.sort((a, b) => {
       return new Date(b.Date) - new Date(a.Date);
     });
-  }, [retailTransactions, wholesaleTransactions, transactionType, searchTerm, customerDetails]);
+  }, [
+    retailTransactions,
+    wholesaleTransactions,
+    transactionType,
+    searchTerm,
+    customerDetails,
+  ]);
 
   // Handle edit transaction click
   const handleModifyTransactionClick = (transaction) => {
@@ -274,22 +297,24 @@ function TransactionTable({ initialTransactionType }) {
       ProductVariation: transaction.ProductVariation,
       NetProfit: transaction.NetProfit,
       // Add type-specific fields
-      ...(transaction.type === "retail" ? {
-        quantity: transaction.Quantity_Pcs,
-        sellingPrice: transaction.SellingPrice_Per_Pc,
-        cogs: transaction.COGS_Per_Pc,
-      } : {
-        quantity: transaction.Quantity_Packets,
-        sellingPrice: transaction.SellingPrice_Per_Packet,
-        cogs: transaction.COGS_Per_Packet,
-      })
+      ...(transaction.type === "retail"
+        ? {
+            quantity: transaction.Quantity_Pcs,
+            sellingPrice: transaction.SellingPrice_Per_Pc,
+            cogs: transaction.COGS_Per_Pc,
+          }
+        : {
+            quantity: transaction.Quantity_Packets,
+            sellingPrice: transaction.SellingPrice_Per_Packet,
+            cogs: transaction.COGS_Per_Packet,
+          }),
     };
 
     setSelectedTransaction(transactionForEdit);
     setIsModifyModalOpen(true);
   };
 
-  // Handle delete transaction click 
+  // Handle delete transaction click
   const handleDeleteClick = (transaction) => {
     setTransactionToDelete(transaction);
     setIsDeleteModalOpen(true);
@@ -304,17 +329,20 @@ function TransactionTable({ initialTransactionType }) {
       const client = await createDynamoDBClient();
 
       // Determine which table to delete from based on transaction type
-      const tableName = transactionToDelete.type === "retail"
-        ? "Transaction_Retail"
-        : "Transaction_Wholesale";
+      const tableName =
+        transactionToDelete.type === "retail"
+          ? "Transaction_Retail"
+          : "Transaction_Wholesale";
 
       // Delete the item from DynamoDB
-      await client.send(new DeleteItemCommand({
-        TableName: tableName,
-        Key: {
-          TransactionID: { S: transactionToDelete.TransactionID }
-        },
-      }));
+      await client.send(
+        new DeleteItemCommand({
+          TableName: tableName,
+          Key: {
+            TransactionID: { S: transactionToDelete.TransactionID },
+          },
+        })
+      );
 
       // Close modal and refresh data
       setIsDeleteModalOpen(false);
@@ -352,15 +380,6 @@ function TransactionTable({ initialTransactionType }) {
     }
   };
 
-  // Handle sign out
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
-
   // Authentication loading state
   if (isAuthLoading) {
     return (
@@ -376,7 +395,7 @@ function TransactionTable({ initialTransactionType }) {
       <div className="text-center text-gray-500 py-12">
         <p className="mb-4">Please log in to see the transaction details.</p>
         <button
-          onClick={() => window.location.href = `/auth/login`}
+          onClick={() => (window.location.href = `/auth/login`)}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           Sign In
@@ -402,10 +421,9 @@ function TransactionTable({ initialTransactionType }) {
   // Calculate totals
   const totalTransactions = allFilteredTransactions.length;
   const totalPages = Math.ceil(totalTransactions / transactionsPerPage);
-  const totalProfit = allFilteredTransactions.reduce(
-    (sum, tx) => sum + parseFloat(tx.NetProfit || 0),
-    0
-  ).toFixed(2);
+  const totalProfit = allFilteredTransactions
+    .reduce((sum, tx) => sum + parseFloat(tx.NetProfit || 0), 0)
+    .toFixed(2);
 
   // Render empty state
   const renderEmptyState = () => (
@@ -413,7 +431,9 @@ function TransactionTable({ initialTransactionType }) {
       <div className="mb-4 p-4 bg-gray-100 rounded-full">
         <Clipboard className="h-8 w-8 text-gray-400" />
       </div>
-      <h3 className="mt-2 text-sm font-medium text-gray-900">No transactions found</h3>
+      <h3 className="mt-2 text-sm font-medium text-gray-900">
+        No transactions found
+      </h3>
       <p className="mt-1 text-sm text-gray-500">
         {searchTerm
           ? "Try adjusting your search terms or filters."
@@ -449,28 +469,31 @@ function TransactionTable({ initialTransactionType }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleTransactionTypeChange("all")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${transactionType === "all"
-              ? "bg-blue-100 text-blue-800"
-              : "text-gray-600 hover:bg-gray-100"
-              }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+              transactionType === "all"
+                ? "bg-blue-100 text-blue-800"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
           >
             All Transactions
           </button>
           <button
             onClick={() => handleTransactionTypeChange("retail")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${transactionType === "retail"
-              ? "bg-blue-100 text-blue-800"
-              : "text-gray-600 hover:bg-gray-100"
-              }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+              transactionType === "retail"
+                ? "bg-blue-100 text-blue-800"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
           >
             Retail
           </button>
           <button
             onClick={() => handleTransactionTypeChange("wholesale")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${transactionType === "wholesale"
-              ? "bg-blue-100 text-blue-800"
-              : "text-gray-600 hover:bg-gray-100"
-              }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+              transactionType === "wholesale"
+                ? "bg-blue-100 text-blue-800"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
           >
             Wholesale
           </button>
@@ -495,8 +518,17 @@ function TransactionTable({ initialTransactionType }) {
             className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md"
             title="Refresh data"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                clipRule="evenodd"
+              />
             </svg>
           </button>
 
@@ -506,13 +538,6 @@ function TransactionTable({ initialTransactionType }) {
           >
             <PlusCircle size={16} className="mr-1" />
             <span>New</span>
-          </button>
-
-          <button
-            onClick={handleSignOut}
-            className="flex items-center px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition"
-          >
-            Sign Out
           </button>
         </div>
       </div>
@@ -525,41 +550,77 @@ function TransactionTable({ initialTransactionType }) {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Date
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Time
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Customer Name
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Mobile Number
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Type
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Product
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Variation
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Quantity
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Selling Price
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     COGS
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
                     Net Profit
                   </th>
                   {isAdmin && (
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       Actions
                     </th>
                   )}
@@ -567,9 +628,13 @@ function TransactionTable({ initialTransactionType }) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {displayTransactions.map((transaction) => {
-                  const customer = customerDetails[transaction.CustomerID] || {};
+                  const customer =
+                    customerDetails[transaction.CustomerID] || {};
                   return (
-                    <tr key={transaction.TransactionID} className="hover:bg-gray-50">
+                    <tr
+                      key={transaction.TransactionID}
+                      className="hover:bg-gray-50"
+                    >
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(transaction.Date)}
                       </td>
@@ -577,17 +642,24 @@ function TransactionTable({ initialTransactionType }) {
                         {transaction.Time || "-"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{customer.Name || "Unknown"}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {customer.Name || "Unknown"}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                         {customer.PhoneNumber || "-"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${transaction.type === "retail"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-indigo-100 text-indigo-800"
-                          }`}>
-                          {transaction.type === "retail" ? "Retail" : "Wholesale"}
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            transaction.type === "retail"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-indigo-100 text-indigo-800"
+                          }`}
+                        >
+                          {transaction.type === "retail"
+                            ? "Retail"
+                            : "Wholesale"}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -612,7 +684,9 @@ function TransactionTable({ initialTransactionType }) {
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => handleModifyTransactionClick(transaction)}
+                              onClick={() =>
+                                handleModifyTransactionClick(transaction)
+                              }
                               className="text-yellow-500 hover:text-yellow-700 hover:bg-yellow-50 p-1 rounded"
                               title="Edit Transaction"
                             >
@@ -640,20 +714,33 @@ function TransactionTable({ initialTransactionType }) {
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{indexOfFirstTransaction + 1}</span> to{" "}
+                  Showing{" "}
+                  <span className="font-medium">
+                    {indexOfFirstTransaction + 1}
+                  </span>{" "}
+                  to{" "}
                   <span className="font-medium">
                     {Math.min(indexOfLastTransaction, totalTransactions)}
                   </span>{" "}
-                  of <span className="font-medium">{totalTransactions}</span> transactions
+                  of <span className="font-medium">{totalTransactions}</span>{" "}
+                  transactions
                 </p>
                 <p className="text-sm text-gray-700 mt-1">
-                  Total Profit: <span className="font-medium text-green-600">${totalProfit}</span>
+                  Total Profit:{" "}
+                  <span className="font-medium text-green-600">
+                    ${totalProfit}
+                  </span>
                 </p>
               </div>
               <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <nav
+                  className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+                  aria-label="Pagination"
+                >
                   <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -667,7 +754,9 @@ function TransactionTable({ initialTransactionType }) {
                   </span>
 
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
                     disabled={currentPage === totalPages}
                     className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -685,14 +774,18 @@ function TransactionTable({ initialTransactionType }) {
               </div>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(prev - 1, 1))
+                  }
                   disabled={currentPage === 1}
                   className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded"
                 >
                   Prev
                 </button>
                 <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
                   disabled={currentPage === totalPages}
                   className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded"
                 >
@@ -707,10 +800,7 @@ function TransactionTable({ initialTransactionType }) {
       )}
 
       {/* Add Transaction Modal */}
-      <AddTransactionModal
-        isOpen={isModalOpen}
-        onClose={handleModalClose}
-      />
+      <AddTransactionModal isOpen={isModalOpen} onClose={handleModalClose} />
 
       {/* Edit Transaction Modal */}
       <AddTransactionModal
@@ -727,7 +817,9 @@ function TransactionTable({ initialTransactionType }) {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Delete Transaction"
-        message={`Are you sure you want to delete this ${transactionToDelete?.type || ''} transaction? This action cannot be undone.`}
+        message={`Are you sure you want to delete this ${
+          transactionToDelete?.type || ""
+        } transaction? This action cannot be undone.`}
         isLoading={isDeleting}
       />
     </div>
