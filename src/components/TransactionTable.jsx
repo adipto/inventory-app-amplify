@@ -1,4 +1,5 @@
 // src/components/TransactionTable.jsx
+import { signInWithRedirect } from "aws-amplify/auth";
 import { DeleteItemCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
 import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
@@ -370,12 +371,23 @@ function TransactionTable({ initialTransactionType }) {
   // Handle various actions
   const handleRefresh = () => fetchData();
   const handleTransactionTypeChange = (type) => setTransactionType(type);
-  const handleNewTransactionClick = () => {
+  const handleNewTransactionClick = async () => {
     if (!isAuthenticated) {
-      // Redirect to Amplify hosted UI for authentication
-      window.location.href = `/auth/login`;
+      try {
+        await signInWithRedirect({ provider: "Cognito" });
+      } catch (err) {
+        console.error("Sign-in error:", err);
+      }
     } else {
       setIsModalOpen(true);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      await signInWithRedirect({ provider: "Cognito" });
+    } catch (err) {
+      console.error("Sign-in error:", err);
     }
   };
 
@@ -389,12 +401,13 @@ function TransactionTable({ initialTransactionType }) {
   }
 
   // Unauthenticated state
+  // Unauthenticated state
   if (!isAuthenticated) {
     return (
       <div className="text-center text-gray-500 py-12">
         <p className="mb-4">Please log in to see the transaction details.</p>
         <button
-          onClick={() => (window.location.href = `/auth/login`)}
+          onClick={handleLogin}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           Sign In
