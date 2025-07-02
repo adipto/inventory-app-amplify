@@ -87,9 +87,8 @@ function TransactionTable({ initialTransactionType }) {
         credentials: fromCognitoIdentityPool({
           identityPoolId: IDENTITY_POOL_ID,
           logins: {
-            [`cognito-idp.${REGION}.amazonaws.com/${
-              import.meta.env.VITE_COGNITO_USER_POOL_ID
-            }`]: idToken,
+            [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID
+              }`]: idToken,
           },
         }),
       });
@@ -299,15 +298,15 @@ function TransactionTable({ initialTransactionType }) {
       // Add type-specific fields
       ...(transaction.type === "retail"
         ? {
-            quantity: transaction.Quantity_Pcs,
-            sellingPrice: transaction.SellingPrice_Per_Pc,
-            cogs: transaction.COGS_Per_Pc,
-          }
+          quantity: transaction.Quantity_Pcs,
+          sellingPrice: transaction.SellingPrice_Per_Pc,
+          cogs: transaction.COGS_Per_Pc,
+        }
         : {
-            quantity: transaction.Quantity_Packets,
-            sellingPrice: transaction.SellingPrice_Per_Packet,
-            cogs: transaction.COGS_Per_Packet,
-          }),
+          quantity: transaction.Quantity_Packets,
+          sellingPrice: transaction.SellingPrice_Per_Packet,
+          cogs: transaction.COGS_Per_Packet,
+        }),
     };
 
     setSelectedTransaction(transactionForEdit);
@@ -469,31 +468,28 @@ function TransactionTable({ initialTransactionType }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleTransactionTypeChange("all")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-              transactionType === "all"
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${transactionType === "all"
+              ? "bg-blue-100 text-blue-800"
+              : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
             All Transactions
           </button>
           <button
             onClick={() => handleTransactionTypeChange("retail")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-              transactionType === "retail"
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${transactionType === "retail"
+              ? "bg-blue-100 text-blue-800"
+              : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
             Retail
           </button>
           <button
             onClick={() => handleTransactionTypeChange("wholesale")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-              transactionType === "wholesale"
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${transactionType === "wholesale"
+              ? "bg-blue-100 text-blue-800"
+              : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
             Wholesale
           </button>
@@ -546,7 +542,8 @@ function TransactionTable({ initialTransactionType }) {
         renderLoading()
       ) : displayTransactions.length > 0 ? (
         <>
-          <div className="overflow-x-auto">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -628,8 +625,7 @@ function TransactionTable({ initialTransactionType }) {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {displayTransactions.map((transaction) => {
-                  const customer =
-                    customerDetails[transaction.CustomerID] || {};
+                  const customer = customerDetails[transaction.CustomerID] || {};
                   return (
                     <tr
                       key={transaction.TransactionID}
@@ -651,15 +647,12 @@ function TransactionTable({ initialTransactionType }) {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            transaction.type === "retail"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-indigo-100 text-indigo-800"
-                          }`}
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${transaction.type === "retail"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-indigo-100 text-indigo-800"
+                            }`}
                         >
-                          {transaction.type === "retail"
-                            ? "Retail"
-                            : "Wholesale"}
+                          {transaction.type === "retail" ? "Retail" : "Wholesale"}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -684,9 +677,7 @@ function TransactionTable({ initialTransactionType }) {
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                           <div className="flex space-x-2">
                             <button
-                              onClick={() =>
-                                handleModifyTransactionClick(transaction)
-                              }
+                              onClick={() => handleModifyTransactionClick(transaction)}
                               className="text-yellow-500 hover:text-yellow-700 hover:bg-yellow-50 p-1 rounded"
                               title="Edit Transaction"
                             >
@@ -709,89 +700,160 @@ function TransactionTable({ initialTransactionType }) {
             </table>
           </div>
 
-          {/* Pagination and Statistics */}
-          <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-700">
-                  Showing{" "}
-                  <span className="font-medium">
-                    {indexOfFirstTransaction + 1}
-                  </span>{" "}
-                  to{" "}
-                  <span className="font-medium">
-                    {Math.min(indexOfLastTransaction, totalTransactions)}
-                  </span>{" "}
-                  of <span className="font-medium">{totalTransactions}</span>{" "}
-                  transactions
-                </p>
-                <p className="text-sm text-gray-700 mt-1">
-                  Total Profit:{" "}
-                  <span className="font-medium text-green-600">
-                    ${totalProfit}
-                  </span>
-                </p>
-              </div>
-              <div>
-                <nav
-                  className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
-                  aria-label="Pagination"
-                >
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(prev - 1, 1))
-                    }
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          {/* Mobile Card View */}
+          <div className="md:hidden">
+            <div className="space-y-4 p-4">
+              {displayTransactions.map((transaction) => {
+                const customer = customerDetails[transaction.CustomerID] || {};
+                return (
+                  <div
+                    key={transaction.TransactionID}
+                    className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 space-y-3"
                   >
-                    <span className="sr-only">Previous</span>
-                    <ChevronDown className="h-5 w-5 rotate-90" />
-                  </button>
+                    {/* Header Row */}
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900 truncate">
+                            {customer.Name || "Unknown"}
+                          </h3>
+                          <span
+                            className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${transaction.type === "retail"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-indigo-100 text-indigo-800"
+                              }`}
+                          >
+                            {transaction.type === "retail" ? "Retail" : "Wholesale"}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          📞 {customer.PhoneNumber || "No phone"}
+                        </div>
+                      </div>
+                    </div>
 
-                  {/* Current page / total pages */}
-                  <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                    {currentPage} / {totalPages}
-                  </span>
+                    {/* Date and Time */}
+                    <div className="flex justify-between text-sm text-gray-500">
+                      <span>📅 {formatDate(transaction.Date)}</span>
+                      <span>🕒 {transaction.Time || "No time"}</span>
+                    </div>
 
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="sr-only">Next</span>
-                    <ChevronDown className="h-5 w-5 -rotate-90" />
-                  </button>
-                </nav>
-              </div>
+                    {/* Product Information */}
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-gray-700">Product:</span>
+                        <span className="text-sm text-gray-900 text-right flex-1 ml-2">
+                          {transaction.ProductName}
+                        </span>
+                      </div>
+                      {transaction.ProductVariation && (
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Variation:</span>
+                          <span className="text-sm text-gray-900 text-right flex-1 ml-2">
+                            {transaction.ProductVariation}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-gray-700">Quantity:</span>
+                        <span className="text-sm text-gray-900">
+                          {transaction.quantity} {transaction.type === "retail" ? "pcs" : "packets"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Financial Information */}
+                    <div className="bg-blue-50 rounded-lg p-3 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-gray-700">Selling Price:</span>
+                        <span className="text-sm font-semibold text-blue-900">
+                          ${formatCurrency(transaction.sellingPrice)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm font-medium text-gray-700">COGS:</span>
+                        <span className="text-sm text-gray-900">
+                          ${formatCurrency(transaction.cogs)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-blue-200 pt-2">
+                        <span className="text-sm font-semibold text-gray-700">Net Profit:</span>
+                        <span className="text-sm font-bold text-green-600">
+                          ${formatCurrency(transaction.NetProfit)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Admin Actions */}
+                    {isAdmin && (
+                      <div className="flex justify-end space-x-3 pt-2 border-t border-gray-100">
+                        <button
+                          onClick={() => handleModifyTransactionClick(transaction)}
+                          className="flex items-center px-3 py-2 text-sm text-yellow-700 bg-yellow-50 rounded-md hover:bg-yellow-100 transition-colors"
+                        >
+                          <Edit size={14} className="mr-1" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(transaction)}
+                          className="flex items-center px-3 py-2 text-sm text-red-700 bg-red-50 rounded-md hover:bg-red-100 transition-colors"
+                        >
+                          <Trash2 size={14} className="mr-1" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Updated Pagination Section */}
+          <div className="bg-gray-50 px-4 py-3 flex flex-col sm:flex-row items-center justify-between border-t border-gray-200">
+            {/* Statistics */}
+            <div className="mb-4 sm:mb-0">
+              <p className="text-sm text-gray-700 text-center sm:text-left">
+                Showing{" "}
+                <span className="font-medium">
+                  {indexOfFirstTransaction + 1}
+                </span>{" "}
+                to{" "}
+                <span className="font-medium">
+                  {Math.min(indexOfLastTransaction, totalTransactions)}
+                </span>{" "}
+                of <span className="font-medium">{totalTransactions}</span>{" "}
+                transactions
+              </p>
+              <p className="text-sm text-gray-700 mt-1 text-center sm:text-left">
+                Total Profit:{" "}
+                <span className="font-medium text-green-600">
+                  ${totalProfit}
+                </span>
+              </p>
             </div>
 
-            {/* Mobile pagination */}
-            <div className="flex sm:hidden justify-between w-full">
-              <div className="text-sm text-gray-700">
-                Page {currentPage} of {totalPages}
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.max(prev - 1, 1))
-                  }
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded"
-                >
-                  Next
-                </button>
-              </div>
+            {/* Pagination Controls */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+
+              <span className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md">
+                {currentPage} / {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
             </div>
           </div>
         </>
@@ -817,9 +879,8 @@ function TransactionTable({ initialTransactionType }) {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Delete Transaction"
-        message={`Are you sure you want to delete this ${
-          transactionToDelete?.type || ""
-        } transaction? This action cannot be undone.`}
+        message={`Are you sure you want to delete this ${transactionToDelete?.type || ""
+          } transaction? This action cannot be undone.`}
         isLoading={isDeleting}
       />
     </div>

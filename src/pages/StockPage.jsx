@@ -394,7 +394,8 @@ function StockPage() {
           ) : (
             /* Table */
             <div className="bg-white overflow-hidden shadow-sm rounded-lg">
-              <div className="overflow-x-auto">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className={activeTab === "retail" ? "bg-blue-50" : "bg-green-50"}>
                     <tr>
@@ -516,8 +517,112 @@ function StockPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden">
+                {filteredAndSortedStock.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {filteredAndSortedStock.map((item) => {
+                      const totalValue = calculateTotalValue(item);
+                      return (
+                        <div key={item.id} className={`p-4 ${item.quantity <= item.lowStockThreshold ? "bg-amber-50" : "bg-white"}`}>
+                          {/* Item Header */}
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                              <h3 className="font-medium text-gray-900">{item.itemType}</h3>
+                              <p className="text-sm text-gray-600">{item.variationName}</p>
+                            </div>
+                            <div className="relative ml-2">
+                              <button
+                                onClick={() => toggleActionsMenu(item.id)}
+                                className="text-gray-400 hover:text-gray-600 p-1"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
+
+                              {showActionsMenu === item.id && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                                  <div className="py-1">
+                                    <button
+                                      onClick={() => handleEditItem(item)}
+                                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    >
+                                      <Edit size={14} className="mr-2" />
+                                      Edit Item
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteItem(item)}
+                                      className="flex items-center w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                                    >
+                                      <Trash size={14} className="mr-2" />
+                                      Delete Item
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Item Details Grid */}
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="text-gray-500">Quantity:</span>
+                              <div className="flex items-center mt-1">
+                                <span className={`font-medium ${item.quantity <= item.lowStockThreshold ? "text-amber-700" : "text-gray-900"}`}>
+                                  {item.quantity} {activeTab === "retail" ? "pcs" : "packets"}
+                                </span>
+                                {item.quantity <= item.lowStockThreshold && (
+                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                    <AlertCircle size={10} className="mr-1" />
+                                    Low
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="text-gray-500">Unit Price:</span>
+                              <p className="font-medium text-gray-900 mt-1">
+                                ${item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Total Value */}
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-500 text-sm">Total Value:</span>
+                              <span className="font-semibold text-lg text-gray-900">
+                                ${totalValue.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-gray-500">
+                    <Package size={48} className="mx-auto mb-4 text-gray-400" />
+                    <p className="text-lg">No stock items found</p>
+                    <p className="text-sm mt-1">
+                      {searchQuery ? "Try changing your search query" : "Start by adding some items to your inventory"}
+                    </p>
+                    <button
+                      onClick={() => {
+                        setItemToEdit(null);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Add New Item
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
+
           {/* Mobile-only Add Item Button at Bottom */}
           <div className="md:hidden mt-6 px-4">
             <button
