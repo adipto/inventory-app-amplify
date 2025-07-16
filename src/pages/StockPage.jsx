@@ -9,12 +9,13 @@ import DeleteConfirmModal from "../utils/DeleteConfirmModal";
 import { fetchStock, deleteStockItem } from "../utils/stockService";
 import {
   LogOut, Plus, Search, Filter, ArrowUpDown,
-  Download, MoreVertical, Edit, Trash, Package, AlertCircle,
-  RefreshCw
+  Download, MoreVertical, Edit, Trash2, Package, AlertCircle,
+  RefreshCw, Eye
 } from "lucide-react";
 
 function StockPage() {
-  const [activeTab, setActiveTab] = useState("retail");
+  // All hooks at the top
+  const [activeTab, setActiveTab] = useState("retail"); // can be 'all', 'retail', 'wholesale'
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: "itemType", direction: "ascending" });
   const [showLowStock, setShowLowStock] = useState(false);
@@ -29,6 +30,8 @@ function StockPage() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Check authentication status
   const checkAuthStatus = async () => {
@@ -38,15 +41,14 @@ function StockPage() {
       setIsAuthenticated(authenticated);
 
       if (!authenticated) {
-        // Redirect to login page or show login component
-        window.location.href = "/"; // Adjust this to your login route
+        window.location.href = "/";
         return false;
       }
       return true;
     } catch (error) {
       console.error("Auth check failed:", error);
       setIsAuthenticated(false);
-      window.location.href = "/"; // Redirect to login
+      window.location.href = "/";
       return false;
     } finally {
       setAuthLoading(false);
@@ -54,7 +56,6 @@ function StockPage() {
   };
 
   // Listen for auth events
-  // Listen for auth events - FIXED VERSION
   useEffect(() => {
     const hubListener = (data) => {
       const { event } = data.payload;
@@ -64,10 +65,7 @@ function StockPage() {
       }
     };
 
-    // Hub.listen returns an unsubscribe function
     const unsubscribe = Hub.listen('auth', hubListener);
-
-    // Return the unsubscribe function to clean up
     return unsubscribe;
   }, []);
 
@@ -100,11 +98,9 @@ function StockPage() {
         throw new Error("No valid authentication token found");
       }
 
-      // Fetch retail stock data
       const retailData = await fetchStock("Retail_Stock", idToken);
       setRetailStock(retailData);
 
-      // Fetch wholesale stock data
       const wholesaleData = await fetchStock("Wholesale_Stock", idToken);
       setWholesaleStock(wholesaleData);
 
@@ -113,7 +109,6 @@ function StockPage() {
       console.error("Error fetching stock data:", err);
       setError("Failed to load stock data. Please try again later.");
 
-      // If auth error, redirect to login
       if (err.message.includes("authentication") || err.message.includes("token")) {
         setIsAuthenticated(false);
         window.location.href = "/";
@@ -133,6 +128,25 @@ function StockPage() {
     }
   };
 
+  // Pagination logic
+  const filteredAndSortedStock =
+    activeTab === "all"
+      ? [...retailStock, ...wholesaleStock]
+      : activeTab === "retail"
+      ? retailStock
+      : wholesaleStock;
+  const totalItems = filteredAndSortedStock.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginatedStock = filteredAndSortedStock.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to first page when filters/search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, showLowStock, activeTab]);
+
   // Show loading while checking authentication
   if (authLoading) {
     return (
@@ -148,17 +162,33 @@ function StockPage() {
     return null;
   }
 
+  // Handlers for PageHeader filters
+  const handleAllClick = () => setActiveTab("all");
+  const handleRetailClick = () => setActiveTab("retail");
+  const handleWholesaleClick = () => setActiveTab("wholesale");
+
   // Get current stock based on active tab
-  const currentStock = activeTab === "retail" ? retailStock : wholesaleStock;
+  const currentStock =
+    activeTab === "all"
+      ? [...retailStock, ...wholesaleStock]
+      : activeTab === "retail"
+      ? retailStock
+      : wholesaleStock;
   const currentTableName = activeTab === "retail" ? "Retail_Stock" : "Wholesale_Stock";
 
   // Calculate total value for each item based on the stock type
   const calculateTotalValue = (item) => {
+    // If showing all, try to infer type from item or default to retail logic
+    if (activeTab === "all") {
+      // If item has a property to distinguish, use it; fallback to retail logic
+      if (item.stockType === "Wholesale" || item.from === "wholesale") {
+        return item.unitPrice * item.quantity * 20;
+      }
+      return item.unitPrice * item.quantity;
+    }
     if (activeTab === "retail") {
-      // For retail: Total Value = Unit Price × Quantity (pcs)
       return item.unitPrice * item.quantity;
     } else {
-      // For wholesale: Total Value = Unit Price × Quantity (packets) × 20
       return item.unitPrice * item.quantity * 20;
     }
   };
@@ -173,25 +203,22 @@ function StockPage() {
     setSortConfig({ key, direction });
   };
 
-  const filteredAndSortedStock = currentStock
-    .filter(item => {
-      const matchesSearch = item.itemType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.variationName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesLowStock = !showLowStock || item.quantity <= item.lowStockThreshold;
-      return matchesSearch && matchesLowStock;
-    })
-    .sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'ascending' ? -1 : 1;
-      if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'ascending' ? 1 : -1;
-      return 0;
-    });
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const handleItemsPerPageChange = (e) => {
+    setItemsPerPage(Number(e.target.value));
+    setCurrentPage(1);
+  };
 
   const toggleActionsMenu = (itemId) => {
     setShowActionsMenu(showActionsMenu === itemId ? null : itemId);
   };
 
   const handleEditItem = (item) => {
-    // Set the item to edit and open the modal
     setItemToEdit({
       itemType: item.itemType,
       variation: item.variationName,
@@ -206,7 +233,6 @@ function StockPage() {
   };
 
   const handleDeleteItem = (item) => {
-    // Set the item to delete and open the confirmation modal
     setItemToDelete({
       itemType: item.itemType,
       variationName: item.variationName,
@@ -230,7 +256,6 @@ function StockPage() {
         idToken
       );
 
-      // Refresh data after successful deletion
       await fetchData();
       setError(null);
     } catch (err) {
@@ -244,7 +269,6 @@ function StockPage() {
   };
 
   const handleExportData = () => {
-    // Create CSV data from filteredAndSortedStock
     const headers = [
       "Item Type",
       "Variation",
@@ -261,7 +285,6 @@ function StockPage() {
       })
     ].join("\n");
 
-    // Create download link
     const blob = new Blob([csvData], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -283,364 +306,441 @@ function StockPage() {
       <Sidebar />
 
       <div className="flex-1 overflow-auto">
-        <PageHeader />
-        <main className="p-6 max-w-7xl mx-auto">
-          {/* Tabs & Actions */}
-          <div className="mb-6 bg-white p-4 rounded-lg shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-2">
+        <PageHeader
+          title="Stock Management"
+          onAllClick={handleAllClick}
+          onRetailClick={handleRetailClick}
+          onWholesaleClick={handleWholesaleClick}
+        />
+        <main className="p-6">
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900 mb-2">Stock Management</h1>
+            <p className="text-gray-600">Manage your retail and wholesale inventory</p>
+          </div>
 
-              {/* Retail & Wholesale Filters */}
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => setActiveTab("retail")}
-                  className={`flex-1 px-4 py-2 rounded-md ${activeTab === "retail"
-                    ? "bg-blue-100 text-blue-700 font-medium"
-                    : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                >
-                  Retail Stock
-                </button>
-                <button
-                  onClick={() => setActiveTab("wholesale")}
-                  className={`flex-1 px-4 py-2 rounded-md ${activeTab === "wholesale"
-                    ? "bg-green-100 text-green-700 font-medium"
-                    : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                >
-                  Wholesale Stock
-                </button>
-              </div>
+          {/* Controls */}
+          <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-4">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 
-              {/* Search and Low Stock */}
-              <div className="flex flex-col sm:flex-row sm:space-x-2 gap-2">
-                <div className="relative flex-1">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <Search size={16} className="text-gray-400" />
-                  </div>
+                {/* Tab Navigation */}
+                <div className="flex rounded-lg bg-gray-100 p-1">
+                  <button
+                    onClick={handleAllClick}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "all"
+                      ? "bg-white text-blue-600 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                      }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={handleRetailClick}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "retail"
+                      ? "bg-white text-blue-600 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                      }`}
+                  >
+                    Retail
+                  </button>
+                  <button
+                    onClick={handleWholesaleClick}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "wholesale"
+                      ? "bg-white text-blue-600 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                      }`}
+                  >
+                    Wholesale
+                  </button>
+                </div>
+
+                {/* Search */}
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                   <input
                     type="text"
-                    placeholder="Search items..."
+                    placeholder="Search transactions..."
                     value={searchQuery}
                     onChange={handleSearch}
-                    className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   />
                 </div>
 
-                <button
-                  onClick={() => setShowLowStock(!showLowStock)}
-                  className={`flex items-center justify-center px-3 py-2 rounded-md border flex-shrink-0 ${showLowStock
-                    ? "bg-amber-50 border-amber-200 text-amber-700"
-                    : "border-gray-300 hover:bg-gray-50"
-                    }`}
-                >
-                  <AlertCircle size={16} className="mr-1" />
-                  Low Stock
-                </button>
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowLowStock(!showLowStock)}
+                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${showLowStock
+                      ? "bg-amber-50 border-amber-200 text-amber-700"
+                      : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                  >
+                    <AlertCircle size={16} className="mr-1" />
+                    Low Stock
+                  </button>
+
+                  <button
+                    onClick={handleExportData}
+                    className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-medium transition-colors"
+                  >
+                    <Download size={16} className="mr-1" />
+                    Export
+                  </button>
+
+                  <button
+                    onClick={fetchData}
+                    disabled={isLoading}
+                    className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} className="mr-1" />
+                    Refresh
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setItemToEdit(null);
+                      setIsAddModalOpen(true);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium transition-colors"
+                  >
+                    <Plus size={16} className="mr-1" />
+                    New
+                  </button>
+                </div>
               </div>
-
-              {/* Export and Refresh */}
-              <div className="flex flex-col min-[400px]:flex-row gap-2">
-
-                <button
-                  onClick={handleExportData}
-                  className="flex-1 flex items-center justify-center px-3 py-2 rounded-md border border-gray-300 hover:bg-gray-50"
-                >
-                  <Download size={16} className="mr-1" />
-                  Export
-                </button>
-
-                <button
-                  onClick={fetchData}
-                  className="flex-1 flex items-center justify-center px-3 py-2 rounded-md border border-gray-300 hover:bg-gray-50"
-                >
-                  <RefreshCw size={16} className="mr-1" />
-                  Refresh
-                </button>
-              </div>
-
-              {/* Add Item Button */}
-              <div>
-                <button
-                  onClick={() => {
-                    setItemToEdit(null);
-                    setIsAddModalOpen(true);
-                  }}
-                  className="w-full flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  <Plus size={16} className="mr-1" />
-                  Add Item
-                </button>
-              </div>
-
             </div>
           </div>
 
           {/* Error message */}
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
-              <p className="flex items-center">
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center text-red-700">
                 <AlertCircle size={16} className="mr-2" />
-                {error}
-              </p>
+                <span className="text-sm">{error}</span>
+              </div>
             </div>
           )}
 
-          {/* Loading state */}
-          {isLoading ? (
-            <div className="flex justify-center items-center p-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700"></div>
-              <span className="ml-3 text-gray-700">Loading stock data...</span>
-            </div>
-          ) : (
-            /* Table */
-            <div className="bg-white overflow-hidden shadow-sm rounded-lg">
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className={activeTab === "retail" ? "bg-blue-50" : "bg-green-50"}>
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700" onClick={() => requestSort("itemType")}>
-                        <div className="flex items-center cursor-pointer">
-                          Item Type
-                          {sortConfig.key === "itemType" && (
-                            <ArrowUpDown size={14} className="ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700" onClick={() => requestSort("variationName")}>
-                        <div className="flex items-center cursor-pointer">
-                          Variation
-                          {sortConfig.key === "variationName" && (
-                            <ArrowUpDown size={14} className="ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700" onClick={() => requestSort("quantity")}>
-                        <div className="flex items-center cursor-pointer">
-                          {activeTab === "retail" ? "Quantity (pcs)" : "Quantity (packets)"}
-                          {sortConfig.key === "quantity" && (
-                            <ArrowUpDown size={14} className="ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700" onClick={() => requestSort("unitPrice")}>
-                        <div className="flex items-center cursor-pointer">
-                          Unit Price
-                          {sortConfig.key === "unitPrice" && (
-                            <ArrowUpDown size={14} className="ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700">
-                        <div className="flex items-center cursor-pointer" onClick={() => requestSort("totalValue")}>
-                          Total Value
-                          {sortConfig.key === "totalValue" && (
-                            <ArrowUpDown size={14} className="ml-1" />
-                          )}
-                        </div>
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-700">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredAndSortedStock.length > 0 ? (
-                      filteredAndSortedStock.map((item) => {
-                        const totalValue = calculateTotalValue(item);
-                        return (
-                          <tr key={item.id} className={item.quantity <= item.lowStockThreshold ? "bg-amber-50" : ""}>
-                            <td className="px-6 py-4">{item.itemType}</td>
-                            <td className="px-6 py-4">{item.variationName}</td>
-                            <td className="px-6 py-4">
-                              <span className={item.quantity <= item.lowStockThreshold ? "text-amber-700 font-medium" : ""}>
-                                {item.quantity}
-                              </span>
-                              {item.quantity <= item.lowStockThreshold && (
-                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-                                  <AlertCircle size={12} className="mr-1" />
-                                  Low
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">${item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}</td>
-                            <td className="px-6 py-4">${totalValue.toFixed(2)}</td>
-                            <td className="px-6 py-4 relative">
-                              <button onClick={() => toggleActionsMenu(item.id)} className="text-gray-400 hover:text-gray-600">
-                                <MoreVertical size={16} />
-                              </button>
-
-                              {showActionsMenu === item.id && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                                  <div className="py-1">
-                                    <button
-                                      onClick={() => handleEditItem(item)}
-                                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                    >
-                                      <Edit size={14} className="mr-2" />
-                                      Edit Item
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteItem(item)}
-                                      className="flex items-center w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                                    >
-                                      <Trash size={14} className="mr-2" />
-                                      Delete Item
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
-                          <Package size={48} className="mx-auto mb-4 text-gray-400" />
-                          <p className="text-lg">No stock items found</p>
-                          <p className="text-sm mt-1">
-                            {searchQuery ? "Try changing your search query" : "Start by adding some items to your inventory"}
-                          </p>
-                          <button
-                            onClick={() => {
-                              setItemToEdit(null);
-                              setIsAddModalOpen(true);
-                            }}
-                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                          >
-                            Add New Item
-                          </button>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+          {/* Stock Table with Loading and Pagination */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            {isLoading ? (
+              <div className="flex justify-center items-center p-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-600">Loading stock data...</span>
               </div>
-
-              {/* Mobile Card View */}
-              <div className="md:hidden">
-                {filteredAndSortedStock.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
-                    {filteredAndSortedStock.map((item) => {
-                      const totalValue = calculateTotalValue(item);
-                      return (
-                        <div key={item.id} className={`p-4 ${item.quantity <= item.lowStockThreshold ? "bg-amber-50" : "bg-white"}`}>
-                          {/* Item Header */}
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex-1">
-                              <h3 className="font-medium text-gray-900">{item.itemType}</h3>
-                              <p className="text-sm text-gray-600">{item.variationName}</p>
-                            </div>
-                            <div className="relative ml-2">
-                              <button
-                                onClick={() => toggleActionsMenu(item.id)}
-                                className="text-gray-400 hover:text-gray-600 p-1"
-                              >
-                                <MoreVertical size={16} />
-                              </button>
-
-                              {showActionsMenu === item.id && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
-                                  <div className="py-1">
-                                    <button
-                                      onClick={() => handleEditItem(item)}
-                                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                    >
-                                      <Edit size={14} className="mr-2" />
-                                      Edit Item
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteItem(item)}
-                                      className="flex items-center w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                                    >
-                                      <Trash size={14} className="mr-2" />
-                                      Delete Item
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+            ) : (
+              <>
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th
+                          className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          onClick={() => requestSort("itemType")}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Item Type</span>
+                            <ArrowUpDown size={14} className="text-gray-400" />
                           </div>
+                        </th>
+                        <th
+                          className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          onClick={() => requestSort("variationName")}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Variation</span>
+                            <ArrowUpDown size={14} className="text-gray-400" />
+                          </div>
+                        </th>
+                        <th
+                          className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          onClick={() => requestSort("quantity")}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Quantity</span>
+                            <ArrowUpDown size={14} className="text-gray-400" />
+                          </div>
+                        </th>
+                        <th
+                          className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          onClick={() => requestSort("unitPrice")}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>Unit Price</span>
+                            <ArrowUpDown size={14} className="text-gray-400" />
+                          </div>
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Total Value
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {paginatedStock.length > 0 ? (
+                        paginatedStock.map((item, index) => {
+                          const totalValue = calculateTotalValue(item);
+                          const isLowStock = item.quantity <= item.lowStockThreshold;
 
-                          {/* Item Details Grid */}
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <span className="text-gray-500">Quantity:</span>
-                              <div className="flex items-center mt-1">
-                                <span className={`font-medium ${item.quantity <= item.lowStockThreshold ? "text-amber-700" : "text-gray-900"}`}>
-                                  {item.quantity} {activeTab === "retail" ? "pcs" : "packets"}
-                                </span>
-                                {item.quantity <= item.lowStockThreshold && (
-                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-                                    <AlertCircle size={10} className="mr-1" />
-                                    Low
+                          return (
+                            <tr key={item.id} className={`hover:bg-gray-50 ${isLowStock ? 'bg-amber-50' : ''}`}>
+                              <td className="px-3 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{item.itemType}</div>
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">{item.variationName}</div>
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap">
+                                <div className="flex items-center space-x-2">
+                                  <span className={`text-sm font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-900'}`}>
+                                    {item.quantity}
                                   </span>
-                                )}
+                                  {isLowStock && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                      Low Stock
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  ${item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}
+                                </div>
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  ${totalValue.toFixed(2)}
+                                </div>
+                              </td>
+                              <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => handleEditItem(item)}
+                                    className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
+                                    title="Edit"
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteItem(item)}
+                                    className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="px-6 py-12 text-center">
+                            <div className="flex flex-col items-center">
+                              <Package size={48} className="text-gray-400 mb-4" />
+                              <h3 className="text-lg font-medium text-gray-900 mb-2">No stock items found</h3>
+                              <p className="text-gray-500 mb-4">
+                                {searchQuery ? "Try adjusting your search terms" : "Start by adding some items to your inventory"}
+                              </p>
+                              <button
+                                onClick={() => {
+                                  setItemToEdit(null);
+                                  setIsAddModalOpen(true);
+                                }}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                              >
+                                Add Stock Item
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls (Desktop) */}
+                {totalPages > 1 && (
+                  <div className="flex justify-between items-center p-4 border-t bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                      >
+                        Prev
+                      </button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <div>
+                      <label className="mr-2 text-sm text-gray-600">Rows per page:</label>
+                      <select
+                        value={itemsPerPage}
+                        onChange={handleItemsPerPageChange}
+                        className="border rounded px-2 py-1 text-sm"
+                      >
+                        {[5, 10, 20, 50].map((num) => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mobile Card View */}
+                <div className="md:hidden">
+                  {paginatedStock.length > 0 ? (
+                    <div className="divide-y divide-gray-200">
+                      {paginatedStock.map((item) => {
+                        const totalValue = calculateTotalValue(item);
+                        const isLowStock = item.quantity <= item.lowStockThreshold;
+
+                        return (
+                          <div key={item.id} className={`p-4 ${isLowStock ? "bg-amber-50" : "bg-white"}`}>
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <h3 className="font-medium text-gray-900">{item.itemType}</h3>
+                                <p className="text-sm text-gray-600">{item.variationName}</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleEditItem(item)}
+                                  className="text-blue-600 hover:text-blue-900 p-1"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteItem(item)}
+                                  className="text-red-600 hover:text-red-900 p-1"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
                             </div>
 
-                            <div>
-                              <span className="text-gray-500">Unit Price:</span>
-                              <p className="font-medium text-gray-900 mt-1">
-                                ${item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}
-                              </p>
-                            </div>
-                          </div>
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <span className="text-gray-500">Quantity:</span>
+                                <div className="flex items-center mt-1">
+                                  <span className={`font-medium ${isLowStock ? "text-amber-600" : "text-gray-900"}`}>
+                                    {item.quantity} {activeTab === "retail" ? "pcs" : "packets"}
+                                  </span>
+                                  {isLowStock && (
+                                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                      Low
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
 
-                          {/* Total Value */}
-                          <div className="mt-3 pt-3 border-t border-gray-200">
-                            <div className="flex justify-between items-center">
-                              <span className="text-gray-500 text-sm">Total Value:</span>
-                              <span className="font-semibold text-lg text-gray-900">
-                                ${totalValue.toFixed(2)}
-                              </span>
+                              <div>
+                                <span className="text-gray-500">Unit Price:</span>
+                                <p className="font-medium text-gray-900 mt-1">
+                                  ${item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-500 text-sm">Total Value:</span>
+                                <span className="font-semibold text-lg text-gray-900">
+                                  ${totalValue.toFixed(2)}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-8 text-center text-gray-500">
-                    <Package size={48} className="mx-auto mb-4 text-gray-400" />
-                    <p className="text-lg">No stock items found</p>
-                    <p className="text-sm mt-1">
-                      {searchQuery ? "Try changing your search query" : "Start by adding some items to your inventory"}
-                    </p>
-                    <button
-                      onClick={() => {
-                        setItemToEdit(null);
-                        setIsAddModalOpen(true);
-                      }}
-                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                    >
-                      Add New Item
-                    </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <Package size={48} className="mx-auto text-gray-400 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No stock items found</h3>
+                      <p className="text-gray-500 mb-4">
+                        {searchQuery ? "Try adjusting your search terms" : "Start by adding some items to your inventory"}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setItemToEdit(null);
+                          setIsAddModalOpen(true);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                      >
+                        Add Stock Item
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pagination Controls (Mobile) */}
+                {totalPages > 1 && (
+                  <div className="flex justify-between items-center p-4 border-t bg-gray-50 md:hidden">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                      >
+                        Prev
+                      </button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                    <div>
+                      <label className="mr-2 text-sm text-gray-600">Rows per page:</label>
+                      <select
+                        value={itemsPerPage}
+                        onChange={handleItemsPerPageChange}
+                        className="border rounded px-2 py-1 text-sm"
+                      >
+                        {[5, 10, 20, 50].map((num) => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* Mobile-only Add Item Button at Bottom */}
-          <div className="md:hidden mt-6 px-4">
-            <button
-              onClick={() => {
-                setItemToEdit(null);
-                setIsAddModalOpen(true);
-              }}
-              className="w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              <Plus size={16} className="mr-1" />
-              Add Item
-            </button>
+              </>
+            )}
           </div>
-
         </main>
       </div>
 
-      {/* AddStock Modal */}
+      {/* Modals */}
       <AddStockModal
         isOpen={isAddModalOpen}
         onClose={handleAddModalClose}
@@ -648,7 +748,6 @@ function StockPage() {
         editItem={itemToEdit}
       />
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}

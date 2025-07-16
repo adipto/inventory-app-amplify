@@ -10,6 +10,7 @@ import { ScanCommand, DeleteItemCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 
 function CustomerList() {
+    // All hooks at the top
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [customers, setCustomers] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -18,6 +19,9 @@ function CustomerList() {
     const [isLoading, setIsLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [userToken, setUserToken] = useState(null);
+    const [dataLoading, setDataLoading] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     // Check authentication status
     const checkAuthStatus = async () => {
@@ -56,7 +60,7 @@ function CustomerList() {
 
     const fetchCustomers = async () => {
         if (!userToken) return;
-
+        setDataLoading(true);
         try {
             const dynamoClient = createDynamoDBClient(userToken);
             const command = new ScanCommand({ TableName: "Customer_Information" });
@@ -69,6 +73,8 @@ function CustomerList() {
             if (error.name === 'UnauthorizedException' || error.message?.includes('token')) {
                 await checkAuthStatus();
             }
+        } finally {
+            setDataLoading(false);
         }
     };
 
@@ -109,6 +115,7 @@ function CustomerList() {
         }
     };
 
+    // All useEffect hooks here
     useEffect(() => {
         checkAuthStatus();
     }, []);
@@ -119,7 +126,12 @@ function CustomerList() {
         }
     }, [isAuthenticated, userToken]);
 
-    // Show loading spinner while checking authentication
+    // Reset to first page when filters/search change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, activeFilter]);
+
+    // Now, after all hooks, you can have your early returns:
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -127,8 +139,6 @@ function CustomerList() {
             </div>
         );
     }
-
-    // If not authenticated, don't render anything (redirect will happen)
     if (!isAuthenticated) {
         return null;
     }
@@ -145,6 +155,25 @@ function CustomerList() {
 
         return matchesType && matchesSearch;
     });
+
+    // Pagination logic
+    const totalItems = filteredCustomers.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedCustomers = filteredCustomers.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = (page) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
+
+    const handleItemsPerPageChange = (e) => {
+        setItemsPerPage(Number(e.target.value));
+        setCurrentPage(1);
+    };
 
     return (
         <div className="flex h-screen bg-gray-50">
@@ -215,125 +244,227 @@ function CustomerList() {
 
                     {/* Desktop Table View */}
                     <div className="hidden md:block bg-white rounded-lg shadow overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Name
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Type
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Email
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Phone
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Address
-                                    </th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredCustomers.map((cust) => (
-                                    <tr key={cust.CustomerID}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{cust.Name}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${cust.CustomerType === 'Retail'
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-blue-100 text-blue-800'
-                                                }`}>
-                                                {cust.CustomerType}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cust.Email || "—"}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cust.PhoneNumber}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={cust.Address}>{cust.Address || "—"}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex gap-3 justify-center">
+                        {dataLoading ? (
+                            <div className="flex items-center justify-center p-12">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                                <span className="ml-3 text-gray-600">Loading customers...</span>
+                            </div>
+                        ) : (
+                            <>
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                Name
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                Type
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                Email
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                Phone
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                Address
+                                            </th>
+                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                                Actions
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {paginatedCustomers.map((cust) => (
+                                            <tr key={cust.CustomerID}>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{cust.Name}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${cust.CustomerType === 'Retail'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : 'bg-blue-100 text-blue-800'
+                                                        }`}>
+                                                        {cust.CustomerType}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cust.Email || "—"}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cust.PhoneNumber}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={cust.Address}>{cust.Address || "—"}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                    <div className="flex gap-3 justify-center">
+                                                        <button
+                                                            onClick={() => handleEdit(cust)}
+                                                            className="text-blue-600 hover:text-blue-800 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Pencil size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(cust)}
+                                                            className="text-red-600 hover:text-red-800 transition-colors"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {/* Pagination Controls (Desktop) */}
+                                {totalPages > 1 && (
+                                    <div className="flex justify-between items-center p-4 border-t bg-gray-50">
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => handlePageChange(currentPage - 1)}
+                                                disabled={currentPage === 1}
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                            >
+                                                Prev
+                                            </button>
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                                                 <button
-                                                    onClick={() => handleEdit(cust)}
-                                                    className="text-blue-600 hover:text-blue-800 transition-colors"
-                                                    title="Edit"
+                                                    key={page}
+                                                    onClick={() => handlePageChange(page)}
+                                                    className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                                                 >
-                                                    <Pencil size={16} />
+                                                    {page}
                                                 </button>
-                                                <button
-                                                    onClick={() => handleDelete(cust)}
-                                                    className="text-red-600 hover:text-red-800 transition-colors"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                            ))}
+                                            <button
+                                                onClick={() => handlePageChange(currentPage + 1)}
+                                                disabled={currentPage === totalPages}
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label className="mr-2 text-sm text-gray-600">Rows per page:</label>
+                                            <select
+                                                value={itemsPerPage}
+                                                onChange={handleItemsPerPageChange}
+                                                className="border rounded px-2 py-1 text-sm"
+                                            >
+                                                {[5, 10, 20, 50].map((num) => (
+                                                    <option key={num} value={num}>{num}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
 
                     {/* Mobile Card View */}
                     <div className="md:hidden space-y-3">
-                        {filteredCustomers.map((cust) => (
-                            <div key={cust.CustomerID} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-gray-900">{cust.Name}</h3>
-                                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${cust.CustomerType === 'Retail'
-                                            ? 'bg-green-100 text-green-800'
-                                            : 'bg-blue-100 text-blue-800'
-                                            }`}>
-                                            {cust.CustomerType}
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => handleEdit(cust)}
-                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                            title="Edit"
-                                        >
-                                            <Pencil size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(cust)}
-                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="Delete"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <Phone size={14} className="mr-2 text-gray-400" />
-                                        {cust.PhoneNumber}
-                                    </div>
-                                    {cust.Email && (
-                                        <div className="flex items-center text-sm text-gray-600">
-                                            <Mail size={14} className="mr-2 text-gray-400" />
-                                            {cust.Email}
-                                        </div>
-                                    )}
-                                    {cust.Address && (
-                                        <div className="flex items-start text-sm text-gray-600">
-                                            <MapPin size={14} className="mr-2 mt-0.5 text-gray-400 flex-shrink-0" />
-                                            <span className="break-words">{cust.Address}</span>
-                                        </div>
-                                    )}
-                                </div>
+                        {dataLoading ? (
+                            <div className="flex items-center justify-center p-12">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                                <span className="ml-3 text-gray-600">Loading customers...</span>
                             </div>
-                        ))}
+                        ) : (
+                            <>
+                                {paginatedCustomers.map((cust) => (
+                                    <div key={cust.CustomerID} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-gray-900">{cust.Name}</h3>
+                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${cust.CustomerType === 'Retail'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-blue-100 text-blue-800'
+                                                    }`}>
+                                                    {cust.CustomerType}
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleEdit(cust)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Edit"
+                                                >
+                                                    <Pencil size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(cust)}
+                                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        </div>
 
-                        {filteredCustomers.length === 0 && (
-                            <div className="text-center py-8 text-gray-500">
-                                No customers found matching your criteria.
-                            </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center text-sm text-gray-600">
+                                                <Phone size={14} className="mr-2 text-gray-400" />
+                                                {cust.PhoneNumber}
+                                            </div>
+                                            {cust.Email && (
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <Mail size={14} className="mr-2 text-gray-400" />
+                                                    {cust.Email}
+                                                </div>
+                                            )}
+                                            {cust.Address && (
+                                                <div className="flex items-start text-sm text-gray-600">
+                                                    <MapPin size={14} className="mr-2 mt-0.5 text-gray-400 flex-shrink-0" />
+                                                    <span className="break-words">{cust.Address}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {paginatedCustomers.length === 0 && (
+                                    <div className="text-center py-8 text-gray-500">
+                                        No customers found matching your criteria.
+                                    </div>
+                                )}
+                                {/* Pagination Controls (Mobile) */}
+                                {totalPages > 1 && (
+                                    <div className="flex justify-between items-center p-4 border-t bg-gray-50 md:hidden">
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => handlePageChange(currentPage - 1)}
+                                                disabled={currentPage === 1}
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                            >
+                                                Prev
+                                            </button>
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => handlePageChange(page)}
+                                                    className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={() => handlePageChange(currentPage + 1)}
+                                                disabled={currentPage === totalPages}
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label className="mr-2 text-sm text-gray-600">Rows per page:</label>
+                                            <select
+                                                value={itemsPerPage}
+                                                onChange={handleItemsPerPageChange}
+                                                className="border rounded px-2 py-1 text-sm"
+                                            >
+                                                {[5, 10, 20, 50].map((num) => (
+                                                    <option key={num} value={num}>{num}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
 
