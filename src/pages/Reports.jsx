@@ -15,7 +15,8 @@ import {
     CartesianGrid,
     ResponsiveContainer,
     Area,
-    AreaChart
+    AreaChart,
+    LabelList
 } from "recharts";
 import { 
     TrendingUp, 
@@ -181,10 +182,8 @@ function EnhancedReportsPage() {
     const [topProducts, setTopProducts] = useState([]);
     const [profitByCategory, setProfitByCategory] = useState([]);
     const [profitByType, setProfitByType] = useState([]);
-    const [cumulativeProfit, setCumulativeProfit] = useState([]);
     const [transactionsByDay, setTransactionsByDay] = useState([]);
     const [salesByProductType, setSalesByProductType] = useState([]);
-    const [yearlyCumulativeProfit, setYearlyCumulativeProfit] = useState([]);
 
     useEffect(() => {
         const checkUser = async () => {
@@ -218,10 +217,8 @@ function EnhancedReportsPage() {
                     setTopProducts(data.topProducts || []);
                     setProfitByCategory(data.profitByCategory || []);
                     setProfitByType(data.profitByType || []);
-                    setCumulativeProfit(data.cumulativeProfit || []);
                     setTransactionsByDay(data.transactionsByDay || []);
                     setSalesByProductType(data.salesByProductType || []);
-                    setYearlyCumulativeProfit([]); // clear
                 } else {
                     // Fetch month+year data
                     const data = await fetchTransactionReports(idToken, selectedMonth, selectedYear);
@@ -232,11 +229,6 @@ function EnhancedReportsPage() {
                     setProfitByType(data.profitByType || []);
                     setTransactionsByDay(data.transactionsByDay || []);
                     setSalesByProductType(data.salesByProductType || []);
-
-                    // Fetch year data for cumulative profit
-                    const yearData = await fetchYearlyTransactions(idToken, selectedYear);
-                    setYearlyCumulativeProfit(yearData.cumulativeProfit || []);
-                    setCumulativeProfit([]); // clear
                 }
             }
         } catch (error) {
@@ -375,7 +367,7 @@ function EnhancedReportsPage() {
 
                                 <div className="space-y-8">
                                     {/* Daily Sales Trend */}
-                                    <ChartCard title={isAllTime ? "Daily Sales Trend (All Time)" : `Daily Sales Trend - ${getMonthName(selectedMonth)} ${selectedYear}`} icon={TrendingUp}>
+                                    <ChartCard title={isAllTime ? `Daily Sales Trend (All Time)` : `Daily Sales Trend – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={TrendingUp}>
                                         <ResponsiveContainer width="100%" height={350}>
                                             <AreaChart data={dailySales}>
                                                 <defs>
@@ -395,7 +387,7 @@ function EnhancedReportsPage() {
                                                     fontSize={12}
                                                     tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                 />
-                                                <YAxis stroke="#64748b" fontSize={12} />
+                                                <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }} />
                                                 <Tooltip content={<CustomTooltip prefix="$" />} />
                                                 <Legend />
                                                 <Area
@@ -419,12 +411,12 @@ function EnhancedReportsPage() {
                                     </ChartCard>
 
                                     {/* Monthly Summary */}
-                                    <ChartCard title={isAllTime ? "Monthly Performance Summary (All Time)" : `Performance Summary - ${getMonthName(selectedMonth)} ${selectedYear}`} icon={BarChart3}>
+                                    <ChartCard title={isAllTime ? `Monthly Performance Summary (All Time)` : `Performance Summary – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={BarChart3}>
                                         <ResponsiveContainer width="100%" height={350}>
                                             <BarChart data={monthlySummary} barGap={10}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                                                 <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                                                <YAxis stroke="#64748b" fontSize={12} />
+                                                <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Amount ($)', angle: -90, position: 'insideLeft' }} />
                                                 <Tooltip content={<CustomTooltip prefix="$" />} />
                                                 <Legend />
                                                 <Bar dataKey="revenue" fill="#3B82F6" name="Revenue" radius={[4, 4, 0, 0]} />
@@ -435,27 +427,88 @@ function EnhancedReportsPage() {
 
                                     {/* Top Products and Profit by Category Row */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <ChartCard title="Top Selling Products" icon={Package}>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={topProducts} layout="horizontal">
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                                    <XAxis type="number" stroke="#64748b" fontSize={12} />
-                                                    <YAxis
-                                                        dataKey="product"
-                                                        type="category"
-                                                        width={120}
-                                                        stroke="#64748b"
-                                                        fontSize={11}
-                                                        tickFormatter={(value) => value.length > 15 ? value.substring(0, 15) + '...' : value}
-                                                    />
-                                                    <Tooltip content={<CustomTooltip />} />
-                                                    <Bar dataKey="quantity" fill="#8B5CF6" name="Quantity" radius={[0, 4, 4, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                        <ChartCard title={isAllTime ? `Top Selling Products (All Time)` : `Top Selling Products – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={Package}>
+                                            {topProducts.length === 0 ? (
+                                                <div className="flex items-center justify-center h-full text-gray-400">No data available for this period.</div>
+                                            ) : (
+                                                (() => {
+                                                    const top10 = topProducts.slice(0, 10);
+                                                    const maxQuantity = Math.max(...top10.map(p => p.quantity), 1);
+                                                    return (
+                                                        <>
+                                                            <ResponsiveContainer width="100%" minWidth={400} height={350}>
+                                                                <BarChart
+                                                                    data={top10}
+                                                                    layout="vertical"
+                                                                    margin={{ left: 20, right: 20, top: 20, bottom: 20 }}
+                                                                    barCategoryGap={"20%"}
+                                                                    barGap={8}
+                                                                >
+                                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                                                    <XAxis
+                                                                        type="number"
+                                                                        dataKey="quantity"
+                                                                        stroke="#64748b"
+                                                                        fontSize={12}
+                                                                        label={{ value: 'Units Sold', position: 'insideBottom', offset: 10 }}
+                                                                        domain={[0, Math.ceil(maxQuantity * 1.2)]}
+                                                                    />
+                                                                    <YAxis
+                                                                        dataKey="product"
+                                                                        type="category"
+                                                                        stroke="#64748b"
+                                                                        fontSize={12}
+                                                                        width={180}
+                                                                        label={{ value: 'Product Name', angle: -90, position: 'insideLeft' }}
+                                                                        tickFormatter={(value) => value.length > 30 ? value.substring(0, 30) + '...' : value}
+                                                                    />
+                                                                    <Tooltip
+                                                                        content={({ active, payload, label }) => {
+                                                                            if (active && payload && payload.length) {
+                                                                                return (
+                                                                                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
+                                                                                        <p className="font-semibold text-gray-800 mb-2">{label}</p>
+                                                                                        {payload.map((entry, index) => (
+                                                                                            <p key={index} className="text-base font-bold text-indigo-700">
+                                                                                                Units Sold: {entry.value?.toLocaleString()}
+                                                                                            </p>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                );
+                                                                            }
+                                                                            return null;
+                                                                        }}
+                                                                    />
+                                                                    <Bar dataKey="quantity" fill="#8B5CF6" name="Units Sold" radius={[4, 4, 0, 0]} >
+                                                                        {top10.map((entry, index) => (
+                                                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                                        ))}
+                                                                        <LabelList
+                                                                            dataKey="quantity"
+                                                                            position="right"
+                                                                            formatter={(value) => value.toLocaleString()}
+                                                                            style={{ fontWeight: 'bold', fill: '#8B5CF6', fontSize: 16 }}
+                                                                        />
+                                                                    </Bar>
+                                                                </BarChart>
+                                                            </ResponsiveContainer>
+                                                            {/* Custom Legend Below Chart */}
+                                                            <div className="flex flex-wrap gap-4 mt-6 justify-center">
+                                                                {top10.map((entry, index) => (
+                                                                    <div key={entry.product} className="flex items-center gap-2 max-w-xs" title={entry.product}>
+                                                                        <span style={{ backgroundColor: COLORS[index % COLORS.length], width: 18, height: 18, display: 'inline-block', borderRadius: 4, border: '1px solid #e5e7eb' }}></span>
+                                                                        <span className="truncate max-w-[140px] text-sm" style={{ display: 'inline-block', verticalAlign: 'middle' }}>{entry.product.length > 25 ? entry.product.slice(0, 25) + '…' : entry.product}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()
+                                            )}
                                         </ChartCard>
 
-                                        <ChartCard title="Profit by Product Category" icon={PieChartIcon}>
-                                            <ResponsiveContainer width="100%" height={300}>
+                                        <ChartCard title={isAllTime ? `Profit by Product Category (All Time)` : `Profit by Product Category – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={PieChartIcon}>
+                                            <ResponsiveContainer width="100%" height={350}>
                                                 <PieChart>
                                                     <Pie
                                                         data={profitByCategory}
@@ -478,9 +531,9 @@ function EnhancedReportsPage() {
                                         </ChartCard>
                                     </div>
 
-                                    {/* Channel Performance and Cumulative Profit Row */}
+                                    {/* Channel Performance and Product Type Sales Comparison Row */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <ChartCard title="Sales Channel Performance" icon={Target}>
+                                        <ChartCard title={isAllTime ? `Sales Channel Performance (All Time)` : `Sales Channel Performance – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={Target}>
                                             <ResponsiveContainer width="100%" height={300}>
                                                 <PieChart>
                                                     <Pie
@@ -503,58 +556,12 @@ function EnhancedReportsPage() {
                                             </ResponsiveContainer>
                                         </ChartCard>
 
-                                        {/* Cumulative Profit Growth */}
-                                        <ChartCard title={isAllTime ? "Cumulative Profit Growth (All Time)" : `Cumulative Profit Growth - ${selectedYear}`} icon={TrendingUp}>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <AreaChart data={isAllTime ? cumulativeProfit : yearlyCumulativeProfit}>
-                                                    <defs>
-                                                        <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                                                            <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.1} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                                    <XAxis
-                                                        dataKey="date"
-                                                        stroke="#64748b"
-                                                        fontSize={12}
-                                                        tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                    />
-                                                    <YAxis stroke="#64748b" fontSize={12} />
-                                                    <Tooltip content={<CustomTooltip prefix="$" />} />
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey="cumulative"
-                                                        stroke="#8B5CF6"
-                                                        fillOpacity={1}
-                                                        fill="url(#colorCumulative)"
-                                                        name="Cumulative Profit"
-                                                    />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </ChartCard>
-                                    </div>
-
-                                    {/* Transaction Analysis Row */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <ChartCard title="Weekly Transaction Patterns" icon={Calendar}>
-                                            <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={transactionsByDay}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                                    <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
-                                                    <YAxis stroke="#64748b" fontSize={12} />
-                                                    <Tooltip content={<CustomTooltip />} />
-                                                    <Bar dataKey="count" fill="#06B6D4" name="Transactions" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        </ChartCard>
-
-                                        <ChartCard title="Product Type Sales Comparison" icon={BarChart3}>
+                                        <ChartCard title={isAllTime ? `Product Type Sales Comparison (All Time)` : `Product Type Sales Comparison – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={BarChart3}>
                                             <ResponsiveContainer width="100%" height={300}>
                                                 <BarChart data={salesByProductType}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                                    <XAxis dataKey="type" stroke="#64748b" fontSize={12} />
-                                                    <YAxis stroke="#64748b" fontSize={12} />
+                                                    <XAxis dataKey="type" stroke="#64748b" fontSize={12} label={{ value: 'Product Type', position: 'insideBottom', offset: -5 }} />
+                                                    <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }} />
                                                     <Tooltip content={<CustomTooltip prefix="$" />} />
                                                     <Legend />
                                                     <Bar dataKey="retail" fill="#3B82F6" name="Retail" radius={[4, 4, 0, 0]} />
@@ -563,6 +570,21 @@ function EnhancedReportsPage() {
                                             </ResponsiveContainer>
                                         </ChartCard>
                                     </div>
+
+                                    {/* Weekly Transaction Patterns - moved to bottom, full width, larger */}
+                                    <ChartCard title={isAllTime ? `Weekly Transaction Patterns (All Time)` : `Weekly Transaction Patterns – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={Calendar} className="w-full">
+                                        <ResponsiveContainer width="100%" height={500}>
+                                            <BarChart data={transactionsByDay}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                                <XAxis dataKey="day" stroke="#64748b" fontSize={12} label={{ value: 'Day of Week', position: 'insideBottom', offset: -5 }} />
+                                                <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Transactions', angle: -90, position: 'insideLeft' }} />
+                                                <Tooltip content={<CustomTooltip />} />
+                                                <Bar dataKey="count" fill="#06B6D4" name="Transactions" radius={[4, 4, 0, 0]} >
+                                                    <LabelList dataKey="count" position="top" formatter={(value) => value.toLocaleString()} />
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </ChartCard>
                                 </div>
                             </>
                         )}
