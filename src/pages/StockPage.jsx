@@ -368,7 +368,7 @@ function StockPage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 mt-2 md:mt-0">
                   <button
                     onClick={() => setShowLowStock(!showLowStock)}
                     className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${showLowStock
