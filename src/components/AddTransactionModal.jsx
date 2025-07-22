@@ -158,8 +158,9 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
                     // Retail: Net Profit = (Quantity_pcs * Selling price) - (COGS_pcs * Quantity_pcs)
                     profit = (quantityNum * sellingPriceNum) - (cogsNum * quantityNum);
                 } else {
-                    // Wholesale: Net Profit = (Quantity_packets * Selling price per packet) - (COGS_packets * 20 * Quantity_packets)
-                    profit = (quantityNum * sellingPriceNum) - (cogsNum * 20 * quantityNum);
+                    // Wholesale: Net Profit = (Quantity_packets * Selling price per packet) - (COGS_per_piece * 500 * Quantity_packets)
+                    const piecesPerPacket = 500;
+                    profit = (quantityNum * sellingPriceNum) - (cogsNum * piecesPerPacket * quantityNum);
                 }
                 setNetProfit(profit.toFixed(2));
             }
