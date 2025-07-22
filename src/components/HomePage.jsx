@@ -6,7 +6,7 @@ import TransactionTable from "./TransactionTable";
 // import TransactionActions from "./TransactionActions";
 
 function HomePage() {
-  const [transactionType, setTransactionType] = useState("all"); // "all", "retail", or "wholesale"
+  const [transactionType, setTransactionType] = useState("wholesale"); // "all", "retail", or "wholesale"
 
   const handleRetailClick = () => {
     setTransactionType("retail");

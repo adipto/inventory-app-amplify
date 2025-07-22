@@ -20,7 +20,7 @@ function AddCustomerModal({ isOpen, onClose, editingCustomer, refreshCustomers, 
     const [formState, setFormState] = useState({
         name: "",
         address: "",
-        customerType: "",
+        customerType: "Wholesale",
         email: "",
         phoneNumber: "",
     });
@@ -33,7 +33,7 @@ function AddCustomerModal({ isOpen, onClose, editingCustomer, refreshCustomers, 
             setFormState({
                 name: editingCustomer.Name || "",
                 address: editingCustomer.Address || "",
-                customerType: editingCustomer.CustomerType || "",
+                customerType: editingCustomer.CustomerType || "Wholesale",
                 email: editingCustomer.Email || "",
                 phoneNumber: editingCustomer.PhoneNumber || "",
             });
@@ -42,7 +42,7 @@ function AddCustomerModal({ isOpen, onClose, editingCustomer, refreshCustomers, 
             setFormState({
                 name: "",
                 address: "",
-                customerType: "",
+                customerType: "Wholesale",
                 email: "",
                 phoneNumber: "",
             });

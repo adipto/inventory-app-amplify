@@ -14,7 +14,7 @@ function CustomerList() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [customers, setCustomers] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeFilter, setActiveFilter] = useState("all");
+    const [activeFilter, setActiveFilter] = useState("wholesale");
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);

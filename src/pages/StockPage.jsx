@@ -15,7 +15,7 @@ import {
 
 function StockPage() {
   // All hooks at the top
-  const [activeTab, setActiveTab] = useState("retail"); // can be 'all', 'retail', 'wholesale'
+  const [activeTab, setActiveTab] = useState("wholesale"); // can be 'all', 'retail', 'wholesale'
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: "itemType", direction: "ascending" });
   const [showLowStock, setShowLowStock] = useState(false);

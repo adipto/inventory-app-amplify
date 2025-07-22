@@ -11,7 +11,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
     const [itemType, setItemType] = useState("Non-judicial stamp");
     const [variation, setVariation] = useState("");
     const [customVariation, setCustomVariation] = useState("");
-    const [stockType, setStockType] = useState("Retail");
+    const [stockType, setStockType] = useState("Wholesale");
     const [quantity, setQuantity] = useState("");
     const [lowStockThreshold, setLowStockThreshold] = useState("10");
     const [isLoading, setIsLoading] = useState(false);
@@ -90,7 +90,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         setItemType("Non-judicial stamp");
         setVariation("");
         setCustomVariation("");
-        setStockType("Retail");
+        setStockType("Wholesale");
         setQuantity("");
         setLowStockThreshold("10");
         setIsEdit(false);

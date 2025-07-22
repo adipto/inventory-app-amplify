@@ -27,7 +27,7 @@ const WHOLESALE_STOCK_TABLE = "Wholesale_Stock";
 
 function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, isEdit = false }) {
     const [selectedDateTime, setSelectedDateTime] = useState(new Date());
-    const [productType, setProductType] = useState("Retail");
+    const [productType, setProductType] = useState("Wholesale");
     const [productCategory, setProductCategory] = useState("Non-judicial stamp");
     const [productVariation, setProductVariation] = useState("");
     const [quantity, setQuantity] = useState("");
@@ -118,7 +118,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
     // Reset form function
     const resetForm = () => {
         setSelectedDateTime(new Date());
-        setProductType("Retail");
+        setProductType("Wholesale");
         setProductCategory("Non-judicial stamp");
         setProductVariation("");
         setQuantity("");
