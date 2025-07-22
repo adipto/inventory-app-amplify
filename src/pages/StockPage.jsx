@@ -483,7 +483,6 @@ function StockPage() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {paginatedStock.length > 0 ? (
                         paginatedStock.map((item, index) => {
-                          const totalValue = calculateTotalValue(item);
                           const isLowStock = item.quantity <= item.lowStockThreshold;
 
                           return (
@@ -513,7 +512,7 @@ function StockPage() {
                               </td>
                               <td className="px-3 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">
-                                  ${totalValue.toFixed(2)}
+                                  ${item.totalValue.toFixed(2)}
                                 </div>
                               </td>
                               <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -611,7 +610,6 @@ function StockPage() {
                   {paginatedStock.length > 0 ? (
                     <div className="divide-y divide-gray-200">
                       {paginatedStock.map((item) => {
-                        const totalValue = calculateTotalValue(item);
                         const isLowStock = item.quantity <= item.lowStockThreshold;
 
                         return (
@@ -664,7 +662,7 @@ function StockPage() {
                               <div className="flex justify-between items-center">
                                 <span className="text-gray-500 text-sm">Total Value:</span>
                                 <span className="font-semibold text-lg text-gray-900">
-                                  ${totalValue.toFixed(2)}
+                                  ${item.totalValue.toFixed(2)}
                                 </span>
                               </div>
                             </div>

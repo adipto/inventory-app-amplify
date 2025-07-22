@@ -21,7 +21,7 @@ export const fetchStock = async (tableName, token) => {
         // Calculate total value based on stock type
         const totalValue = isRetail
             ? unitPrice * quantity
-            : unitPrice * quantity * 20; // For wholesale: 1 packet = 20 pcs
+            : unitPrice * quantity * 500; // For wholesale: 1 packet = 500 pcs
 
         return {
             id: `${item.ItemType?.S}-${item.VariationName?.S}`,
