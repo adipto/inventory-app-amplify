@@ -1,5 +1,5 @@
 // src/utils/stockService.js
-import { ScanCommand, DeleteItemCommand, GetItemCommand } from "@aws-sdk/client-dynamodb";
+import { ScanCommand, DeleteItemCommand, GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 import { createDynamoDBClient } from "../aws/aws-config";
 
 export const fetchStock = async (tableName, token) => {
@@ -86,4 +86,40 @@ export const getStockItem = async (tableName, itemType, variationName, token) =>
         totalValue: totalValue,
         lowStockThreshold: Number(response.Item.LowStockThreshold?.N || 10),
     };
+};
+
+/**
+ * Decrement stock after a transaction.
+ * @param {Object} params
+ * @param {string} params.tableName - 'Retail_Stock' or 'Wholesale_Stock'
+ * @param {string} params.itemType - ItemType (e.g., 'Non-judicial stamp')
+ * @param {string} params.variationName - VariationName (e.g., '30-26')
+ * @param {number} params.quantityToSubtract - Number of pcs or packets to subtract
+ * @param {string} params.token - Auth token
+ */
+export const updateStockAfterTransaction = async ({
+    tableName,
+    itemType,
+    variationName,
+    quantityToSubtract,
+    token,
+}) => {
+    const client = await createDynamoDBClient(token);
+    const quantityField = tableName === "Retail_Stock" ? "Quantity_pcs" : "Quantity_packets";
+
+    // Use DynamoDB's SET with subtraction and a condition to prevent negative stock
+    const command = new UpdateItemCommand({
+        TableName: tableName,
+        Key: {
+            ItemType: { S: itemType },
+            VariationName: { S: variationName }
+        },
+        UpdateExpression: `SET ${quantityField} = ${quantityField} - :q` ,
+        ConditionExpression: `${quantityField} >= :q`,
+        ExpressionAttributeValues: {
+            ":q": { N: quantityToSubtract.toString() }
+        }
+    });
+
+    return client.send(command);
 };

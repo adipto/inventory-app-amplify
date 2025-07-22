@@ -14,6 +14,7 @@ import {
     fromCognitoIdentityPool,
 } from "@aws-sdk/credential-provider-cognito-identity";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
+import { updateStockAfterTransaction } from "../utils/stockService";
 
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -372,12 +373,36 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
                 })
             );
 
+            // --- Update Stock After Transaction ---
+            // Get the current auth session for token
+            const session = await fetchAuthSession();
+            const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+            // Determine stock table and quantity to subtract
+            const stockTable = productType === "Retail" ? RETAIL_STOCK_TABLE : WHOLESALE_STOCK_TABLE;
+            const quantityToSubtract = parseInt(quantity, 10);
+            try {
+                await updateStockAfterTransaction({
+                    tableName: stockTable,
+                    itemType: productCategory,
+                    variationName: productVariation,
+                    quantityToSubtract,
+                    token: idToken,
+                });
+            } catch (stockError) {
+                throw stockError;
+            }
+            // --- End Stock Update ---
+
             alert(`Transaction ${isEditMode ? 'updated' : 'added'} successfully!`);
             onClose();
 
         } catch (error) {
             console.error(`Error ${isEditMode ? 'updating' : 'adding'} transaction:`, error);
-            alert(`Failed to ${isEditMode ? 'update' : 'add'} transaction. Please try again.`);
+            if (error.name === "ConditionalCheckFailedException") {
+                alert("Not enough stock available for this product/variation. Please check your stock levels.");
+            } else {
+                alert(`Failed to ${isEditMode ? 'update' : 'add'} transaction. Please try again.`);
+            }
         } finally {
             setIsSubmitting(false);
         }
