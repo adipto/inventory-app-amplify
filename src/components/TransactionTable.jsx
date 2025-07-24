@@ -45,6 +45,12 @@ function TransactionTable({ initialTransactionType }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const transactionsPerPage = 10;
+  const [retailLastEvaluatedKeys, setRetailLastEvaluatedKeys] = useState([null]);
+  const [wholesaleLastEvaluatedKeys, setWholesaleLastEvaluatedKeys] = useState([null]);
+  const [retailTotalPages, setRetailTotalPages] = useState(1);
+  const [wholesaleTotalPages, setWholesaleTotalPages] = useState(1);
+  const [retailPageTransactions, setRetailPageTransactions] = useState([]);
+  const [wholesalePageTransactions, setWholesalePageTransactions] = useState([]);
 
   // AWS Configuration
   const REGION = "us-east-1";
@@ -132,14 +138,14 @@ function TransactionTable({ initialTransactionType }) {
         fetchWholesaleTransactions(idToken),
       ]);
 
-      setRetailTransactions(retailData);
-      setWholesaleTransactions(wholesaleData);
+      setRetailTransactions(retailData.items);
+      setWholesaleTransactions(wholesaleData.items);
 
       // Get all unique customer IDs
       const allCustomerIds = [
         ...new Set([
-          ...retailData.map((item) => item.CustomerID),
-          ...wholesaleData.map((item) => item.CustomerID),
+          ...retailData.items.map((item) => item.CustomerID),
+          ...wholesaleData.items.map((item) => item.CustomerID),
         ]),
       ];
 
@@ -224,44 +230,93 @@ function TransactionTable({ initialTransactionType }) {
     return parseFloat(amount).toFixed(2);
   };
 
-  // Get filtered transactions based on current filters
-  const getFilteredTransactions = useCallback(() => {
-    let filteredTransactions = [];
-
-    if (transactionType === "all" || transactionType === "retail") {
-      const processedRetail = retailTransactions.map((tx) => ({
+  const fetchRetailPage = useCallback(async (page = 1) => {
+    setIsLoading(true);
+    try {
+      const idToken = await getIdToken();
+      const startKey = retailLastEvaluatedKeys[page - 1] || null;
+      const { items, lastEvaluatedKey } = await fetchRetailTransactions(idToken, transactionsPerPage, startKey);
+      setRetailPageTransactions((items || []).map(tx => ({
         ...tx,
-        type: "retail",
+        type: 'retail',
         quantity: tx.Quantity_Pcs,
         sellingPrice: tx.SellingPrice_Per_Pc,
         cogs: tx.COGS_Per_Pc,
-      }));
-      filteredTransactions = [...filteredTransactions, ...processedRetail];
+      })));
+      const newKeys = [...retailLastEvaluatedKeys];
+      newKeys[page] = lastEvaluatedKey || null;
+      setRetailLastEvaluatedKeys(newKeys);
+      setRetailTotalPages(newKeys.filter((k) => k !== null).length + 1);
+      // Fetch customer details for this page
+      const allCustomerIds = [...new Set((items || []).map((item) => item.CustomerID))];
+      const customers = await fetchCustomerDetails(idToken, allCustomerIds);
+      setCustomerDetails((prev) => ({ ...prev, ...customers }));
+    } catch (error) {
+      console.error("Error fetching retail page:", error);
+    } finally {
+      setIsLoading(false);
     }
+  }, [getIdToken, transactionsPerPage]);
 
-    if (transactionType === "all" || transactionType === "wholesale") {
-      const processedWholesale = wholesaleTransactions.map((tx) => ({
+  const fetchWholesalePage = useCallback(async (page = 1) => {
+    setIsLoading(true);
+    try {
+      const idToken = await getIdToken();
+      const startKey = wholesaleLastEvaluatedKeys[page - 1] || null;
+      const { items, lastEvaluatedKey } = await fetchWholesaleTransactions(idToken, transactionsPerPage, startKey);
+      setWholesalePageTransactions((items || []).map(tx => ({
         ...tx,
-        type: "wholesale",
+        type: 'wholesale',
         quantity: tx.Quantity_Packets,
         sellingPrice: tx.SellingPrice_Per_Packet,
         cogs: tx.COGS_Per_Packet,
-      }));
-      filteredTransactions = [...filteredTransactions, ...processedWholesale];
+      })));
+      const newKeys = [...wholesaleLastEvaluatedKeys];
+      newKeys[page] = lastEvaluatedKey || null;
+      setWholesaleLastEvaluatedKeys(newKeys);
+      setWholesaleTotalPages(newKeys.filter((k) => k !== null).length + 1);
+      // Fetch customer details for this page
+      const allCustomerIds = [...new Set((items || []).map((item) => item.CustomerID))];
+      const customers = await fetchCustomerDetails(idToken, allCustomerIds);
+      setCustomerDetails((prev) => ({ ...prev, ...customers }));
+    } catch (error) {
+      console.error("Error fetching wholesale page:", error);
+    } finally {
+      setIsLoading(false);
     }
+  }, [getIdToken, transactionsPerPage]);
 
+  // Fetch correct page when transactionType or currentPage changes
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (transactionType === "retail") {
+      fetchRetailPage(currentPage);
+    } else if (transactionType === "wholesale") {
+      fetchWholesalePage(currentPage);
+    }
+  }, [isAuthenticated, transactionType, currentPage, fetchRetailPage, fetchWholesalePage]);
+
+  // Get filtered transactions for the current page
+  const getFilteredTransactions = useCallback(() => {
+    let filteredTransactions = [];
+    if (transactionType === "retail") {
+      filteredTransactions = retailPageTransactions;
+    } else if (transactionType === "wholesale") {
+      filteredTransactions = wholesalePageTransactions;
+    } else {
+      // For 'all', combine the current page of both types
+      filteredTransactions = [...retailPageTransactions, ...wholesalePageTransactions];
+    }
     // Apply search filtering
     if (searchTerm) {
       const searchTermLower = searchTerm.toLowerCase();
       filteredTransactions = filteredTransactions.filter((transaction) => {
         const customer = customerDetails[transaction.CustomerID];
         if (!customer) return false;
-
         const customerName = customer.Name || "";
         const customerPhone = customer.PhoneNumber || "";
         const customerId = transaction.CustomerID || "";
         const transactionId = transaction.TransactionID || "";
-
         return (
           customerName.toLowerCase().includes(searchTermLower) ||
           customerPhone.includes(searchTerm) ||
@@ -270,18 +325,11 @@ function TransactionTable({ initialTransactionType }) {
         );
       });
     }
-
     // Sort by date, newest first
     return filteredTransactions.sort((a, b) => {
       return new Date(b.Date) - new Date(a.Date);
     });
-  }, [
-    retailTransactions,
-    wholesaleTransactions,
-    transactionType,
-    searchTerm,
-    customerDetails,
-  ]);
+  }, [retailPageTransactions, wholesalePageTransactions, transactionType, searchTerm, customerDetails]);
 
   // Handle edit transaction click
   const handleModifyTransactionClick = (transaction) => {
@@ -422,20 +470,16 @@ function TransactionTable({ initialTransactionType }) {
   // const isAdmin = userGroups; // You may need to adjust this based on how groups are stored in your Amplify setup
 
   // Get transactions for display
-  const allFilteredTransactions = getFilteredTransactions();
+  const displayTransactions = getFilteredTransactions();
   const indexOfLastTransaction = currentPage * transactionsPerPage;
   const indexOfFirstTransaction = indexOfLastTransaction - transactionsPerPage;
-  const displayTransactions = allFilteredTransactions.slice(
-    indexOfFirstTransaction,
-    indexOfLastTransaction
-  );
-
-  // Calculate totals
-  const totalTransactions = allFilteredTransactions.length;
-  const totalPages = Math.ceil(totalTransactions / transactionsPerPage);
-  const totalProfit = allFilteredTransactions
+  const totalTransactions = displayTransactions.length;
+  const totalProfit = displayTransactions
     .reduce((sum, tx) => sum + parseFloat(tx.NetProfit || 0), 0)
     .toFixed(2);
+
+  // Update pagination controls
+  const totalPages = transactionType === "retail" ? retailTotalPages : transactionType === "wholesale" ? wholesaleTotalPages : 1;
 
   // Render empty state
   const renderEmptyState = () => (
@@ -550,6 +594,14 @@ function TransactionTable({ initialTransactionType }) {
           </button>
         </div>
       </div>
+
+      {isLoading ? (
+        renderLoading()
+      ) : transactionType === "all" && (
+        <div className="mb-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+          <strong>Note:</strong> This view shows a mix of the current page of both Retail and Wholesale transactions. Use the Retail or Wholesale tabs for paginated views of each type.
+        </div>
+      )}
 
       {isLoading ? (
         renderLoading()

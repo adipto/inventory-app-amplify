@@ -8,6 +8,7 @@ import { UserPlus, Pencil, Trash2, Filter, Search, Phone, Mail, MapPin } from "l
 import { createDynamoDBClient } from "../aws/aws-config";
 import { ScanCommand, DeleteItemCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
+import { fetchCustomers as fetchCustomersAPI } from "../api/fetchCustomers";
 
 function CustomerList() {
     // All hooks at the top
@@ -22,6 +23,7 @@ function CustomerList() {
     const [dataLoading, setDataLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [lastEvaluatedKeys, setLastEvaluatedKeys] = useState([null]); // Array of start keys for each page
 
     // Check authentication status
     const checkAuthStatus = async () => {
@@ -58,18 +60,19 @@ function CustomerList() {
     const handleWholesaleClick = () => setActiveFilter("wholesale");
     const handleResetFilter = () => setActiveFilter("all");
 
-    const fetchCustomers = async () => {
+    const fetchCustomersPage = async (page = 1, limit = itemsPerPage) => {
         if (!userToken) return;
         setDataLoading(true);
         try {
-            const dynamoClient = createDynamoDBClient(userToken);
-            const command = new ScanCommand({ TableName: "Customer_Information" });
-            const response = await dynamoClient.send(command);
-            const items = response.Items.map((item) => unmarshall(item));
+            const startKey = lastEvaluatedKeys[page - 1] || null;
+            const { items, lastEvaluatedKey } = await fetchCustomersAPI(userToken, limit, startKey);
             setCustomers(items);
+            // Store the key for the next page
+            const newKeys = [...lastEvaluatedKeys];
+            newKeys[page] = lastEvaluatedKey || null;
+            setLastEvaluatedKeys(newKeys);
         } catch (error) {
             console.error("Error fetching customers:", error);
-            // If token is invalid, try to refresh
             if (error.name === 'UnauthorizedException' || error.message?.includes('token')) {
                 await checkAuthStatus();
             }
@@ -91,7 +94,7 @@ function CustomerList() {
                 Key: { CustomerID: { S: customer.CustomerID } },
             });
             await dynamoClient.send(deleteCmd);
-            fetchCustomers();
+            fetchCustomersPage(currentPage, itemsPerPage); // Refresh current page
         } catch (error) {
             console.error("Delete error:", error);
             // If token is invalid, try to refresh
@@ -122,13 +125,15 @@ function CustomerList() {
 
     useEffect(() => {
         if (isAuthenticated && userToken) {
-            fetchCustomers();
+            fetchCustomersPage(currentPage, itemsPerPage);
         }
-    }, [isAuthenticated, userToken]);
+        // eslint-disable-next-line
+    }, [isAuthenticated, userToken, currentPage, itemsPerPage]);
 
     // Reset to first page when filters/search change
     useEffect(() => {
         setCurrentPage(1);
+        setLastEvaluatedKeys([null]); // Reset lastEvaluatedKeys when filters change
     }, [searchQuery, activeFilter]);
 
     // Now, after all hooks, you can have your early returns:
@@ -158,14 +163,13 @@ function CustomerList() {
 
     // Pagination logic
     const totalItems = filteredCustomers.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
-    const paginatedCustomers = filteredCustomers.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
+    const totalPages = lastEvaluatedKeys.filter((k) => k !== null).length + 1;
+    const paginatedCustomers = filteredCustomers; // Already paginated from server
 
     const handlePageChange = (page) => {
-        if (page >= 1 && page <= totalPages) {
+        if (page < 1) return;
+        // Only fetch next page if we have a start key or it's the first page
+        if (page === 1 || lastEvaluatedKeys[page - 1]) {
             setCurrentPage(page);
         }
     };
@@ -173,6 +177,7 @@ function CustomerList() {
     const handleItemsPerPageChange = (e) => {
         setItemsPerPage(Number(e.target.value));
         setCurrentPage(1);
+        setLastEvaluatedKeys([null]);
     };
 
     return (
@@ -484,7 +489,7 @@ function CustomerList() {
                         isOpen={isModalOpen}
                         onClose={closeModal}
                         editingCustomer={editingCustomer}
-                        refreshCustomers={fetchCustomers}
+                        refreshCustomers={fetchCustomersPage}
                         userToken={userToken}
                     />
                 </main>
