@@ -6,12 +6,13 @@ import Sidebar from "../components/Sidebar";
 import AddStockModal from "../components/AddStockModal";
 import PageHeader from "../components/PageHeader";
 import DeleteConfirmModal from "../utils/DeleteConfirmModal";
-import { fetchStock, deleteStockItem } from "../utils/stockService";
+import { fetchStock, deleteStockItem, fetchStockEntries } from "../utils/stockService";
 import {
   LogOut, Plus, Search, Filter, ArrowUpDown,
   Download, MoreVertical, Edit, Trash2, Package, AlertCircle,
   RefreshCw, Eye
 } from "lucide-react";
+import AllStockEntriesTable from "../components/AllStockEntriesTable";
 
 function StockPage() {
   // All hooks at the top
@@ -32,6 +33,8 @@ function StockPage() {
   const [authLoading, setAuthLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [stockEntries, setStockEntries] = useState([]);
+  const [entriesLoading, setEntriesLoading] = useState(true);
 
   // Check authentication status
   const checkAuthStatus = async () => {
@@ -75,6 +78,7 @@ function StockPage() {
       const authenticated = await checkAuthStatus();
       if (authenticated) {
         await fetchData();
+        fetchEntries();
       }
     };
 
@@ -87,6 +91,22 @@ function StockPage() {
       fetchData();
     }
   }, [activeTab, isAuthenticated, authLoading]);
+
+  // Fetch all stock entries
+  const fetchEntries = async () => {
+    try {
+      setEntriesLoading(true);
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+      if (!idToken) return;
+      const entries = await fetchStockEntries(idToken);
+      setStockEntries(entries);
+    } catch (err) {
+      console.error("Error fetching stock entries:", err);
+    } finally {
+      setEntriesLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -296,9 +316,11 @@ function StockPage() {
     document.body.removeChild(a);
   };
 
+  // Update handleAddModalClose to also fetch entries
   const handleAddModalClose = () => {
     setIsAddModalOpen(false);
     setItemToEdit(null);
+    fetchEntries();
   };
 
   return (
@@ -735,6 +757,13 @@ function StockPage() {
               </>
             )}
           </div>
+          {/* All Stock Entries Table */}
+          <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">All Stock Entries</h2>
+          <AllStockEntriesTable
+            entries={stockEntries}
+            onRefresh={fetchEntries}
+            loading={entriesLoading}
+          />
         </main>
       </div>
 
@@ -742,7 +771,10 @@ function StockPage() {
       <AddStockModal
         isOpen={isAddModalOpen}
         onClose={handleAddModalClose}
-        onStockAdded={fetchData}
+        onStockAdded={() => {
+          fetchData();
+          fetchEntries();
+        }}
         editItem={itemToEdit}
       />
 

@@ -17,6 +17,11 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
     const [isLoading, setIsLoading] = useState(false);
     const [isEdit, setIsEdit] = useState(false);
     const [originalItem, setOriginalItem] = useState(null);
+    const [date, setDate] = useState(() => {
+        // Default to today's date in YYYY-MM-DD format
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+    });
 
     const isCustomVariation = variation === "__custom__";
 
@@ -70,6 +75,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             setStockType(editItem.stockType || "Retail");
             setQuantity(editItem.quantity?.toString() || "");
             setLowStockThreshold(editItem.lowStockThreshold?.toString() || "10");
+            setDate(editItem.date || new Date().toISOString().split('T')[0]);
 
             // Handle custom variation if needed
             if (
@@ -95,6 +101,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         setLowStockThreshold("10");
         setIsEdit(false);
         setOriginalItem(null);
+        setDate(new Date().toISOString().split('T')[0]);
     };
 
     const handleSubmit = async (e) => {
@@ -109,6 +116,43 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             const finalVariation = isCustomVariation ? customVariation : variation;
             const tableName = stockType === "Retail" ? "Retail_Stock" : "Wholesale_Stock";
             const quantityField = stockType === "Retail" ? "Quantity_pcs" : "Quantity_packets";
+
+            // Extract unit price from variation name (same logic as before)
+            let unitPrice = 0;
+            if (finalVariation.includes("-")) {
+                const pricePart = finalVariation.split("-")[1];
+                if (!isNaN(pricePart)) {
+                    unitPrice = Number(pricePart);
+                }
+            } else if (finalVariation.includes("_")) {
+                const pricePart = finalVariation.split("_")[1];
+                if (!isNaN(pricePart)) {
+                    unitPrice = Number(pricePart);
+                }
+            }
+
+            // --- Insert into Stock_Entries if this is a new item (not edit) ---
+            if (!isEdit) {
+                // Prepare item for Stock_Entries
+                const stockEntryItem = {
+                    Date: { S: date },
+                    ItemType: { S: itemType },
+                    VariationName: { S: finalVariation },
+                    UnitPrice: { N: unitPrice.toString() },
+                };
+                if (stockType === "Wholesale") {
+                    stockEntryItem.Quantity_Packets = { N: Number(quantity).toString() };
+                } else {
+                    stockEntryItem.Quantity_Pcs = { N: Number(quantity).toString() };
+                }
+                // Insert into Stock_Entries table
+                const stockEntriesCommand = new PutItemCommand({
+                    TableName: "Stock_Entries",
+                    Item: stockEntryItem
+                });
+                await dynamoClient.send(stockEntriesCommand);
+            }
+            // --- End insert into Stock_Entries ---
 
             if (isEdit && originalItem) {
                 // Get the current item to update
@@ -273,7 +317,8 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             ItemType: { S: itemType },
             VariationName: { S: variationName },
             [quantityField]: { N: quantity.toString() },
-            LowStockThreshold: { N: lowStockThreshold.toString() }
+            LowStockThreshold: { N: lowStockThreshold.toString() },
+            Date: { S: date } // Add the date field
         };
 
         // Extract unit price from variation name (assuming the pattern)
@@ -345,6 +390,18 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                 </div>
 
                                 <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                                    {/* Date Picker */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                        <input
+                                            type="date"
+                                            value={date}
+                                            onChange={(e) => setDate(e.target.value)}
+                                            className="w-full border p-2 rounded"
+                                            required
+                                            disabled={isLoading}
+                                        />
+                                    </div>
                                     {/* Item Type */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Item Type</label>

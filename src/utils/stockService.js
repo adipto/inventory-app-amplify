@@ -1,5 +1,5 @@
 // src/utils/stockService.js
-import { ScanCommand, DeleteItemCommand, GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
+import { ScanCommand, DeleteItemCommand, GetItemCommand, UpdateItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { createDynamoDBClient } from "../aws/aws-config";
 
 export const fetchStock = async (tableName, token) => {
@@ -37,18 +37,86 @@ export const fetchStock = async (tableName, token) => {
     return stock;
 };
 
-export const deleteStockItem = async (tableName, itemType, variationName, token) => {
-    const client = await createDynamoDBClient(token);
+export const deleteStockItem = async (tableName, arg1, arg2, arg3, arg4) => {
+    let command;
+    if (tableName === "Stock_Entries") {
+        // (tableName, date, variationName, token)
+        const date = arg1;
+        const variationName = arg2;
+        const token = arg3;
+        const client = await createDynamoDBClient(token);
+        const keyObj = {
+            Date: { S: date }
+        };
+        console.log("[deleteStockItem] Deleting from Stock_Entries with key:", keyObj);
+        command = new DeleteItemCommand({
+            TableName: tableName,
+            Key: keyObj
+        });
+        return await client.send(command);
+    } else {
+        // (tableName, itemType, variationName, token)
+        const itemType = arg1;
+        const variationName = arg2;
+        const token = arg3;
+        const client = await createDynamoDBClient(token);
+        command = new DeleteItemCommand({
+            TableName: tableName,
+            Key: {
+                ItemType: { S: itemType },
+                VariationName: { S: variationName }
+            }
+        });
+        return await client.send(command);
+    }
+};
 
-    const command = new DeleteItemCommand({
+// Helper to deduct quantity from main stock table after deleting a stock entry
+export const deductFromMainStock = async ({
+    tableName,
+    itemType,
+    variationName,
+    quantityToDeduct,
+    token
+}) => {
+    const client = await createDynamoDBClient(token);
+    const quantityField = tableName === "Retail_Stock" ? "Quantity_pcs" : "Quantity_packets";
+    console.log("[deductFromMainStock] Looking up:", { tableName, itemType, variationName, quantityToDeduct });
+    console.log("[deductFromMainStock] Key types:", {
+        itemType, typeOfItemType: typeof itemType,
+        variationName, typeOfVariationName: typeof variationName
+    });
+    // Get current item
+    const getCommand = new GetItemCommand({
         TableName: tableName,
         Key: {
             ItemType: { S: itemType },
             VariationName: { S: variationName }
         }
     });
-
-    return await client.send(command);
+    const response = await client.send(getCommand);
+    if (!response.Item) {
+        throw new Error(`[deductFromMainStock] Main stock item not found for ItemType='${itemType}', VariationName='${variationName}' in table '${tableName}'.`);
+    }
+    console.log("[deductFromMainStock] DynamoDB item:", response.Item);
+    console.log("[deductFromMainStock] quantityField:", quantityField);
+    if (!response.Item[quantityField]) {
+        throw new Error(`[deductFromMainStock] quantityField '${quantityField}' not found in item. Item: ${JSON.stringify(response.Item)}`);
+    }
+    const currentQuantity = Number(response.Item[quantityField]?.N || 0);
+    const newQuantity = Math.max(0, currentQuantity - quantityToDeduct);
+    const updateCommand = new UpdateItemCommand({
+        TableName: tableName,
+        Key: {
+            ItemType: { S: itemType },
+            VariationName: { S: variationName }
+        },
+        UpdateExpression: `SET ${quantityField} = :q` ,
+        ExpressionAttributeValues: {
+            ":q": { N: newQuantity.toString() }
+        }
+    });
+    await client.send(updateCommand);
 };
 
 export const getStockItem = async (tableName, itemType, variationName, token) => {
@@ -122,4 +190,119 @@ export const updateStockAfterTransaction = async ({
     });
 
     return client.send(command);
+};
+
+export const updateStockEntry = async ({
+    originalDate,
+    originalItemType,
+    originalVariationName,
+    newDate,
+    newItemType,
+    newVariationName,
+    quantityPackets,
+    quantityPcs,
+    unitPrice,
+    token
+}) => {
+    const client = await createDynamoDBClient(token);
+    // If any key fields change, delete old and create new
+    const keyChanged = originalDate !== newDate || originalItemType !== newItemType || originalVariationName !== newVariationName;
+    if (keyChanged) {
+        // Delete old
+        await client.send(new DeleteItemCommand({
+            TableName: "Stock_Entries",
+            Key: {
+                Date: { S: originalDate },
+                ItemType: { S: originalItemType },
+                VariationName: { S: originalVariationName }
+            }
+        }));
+        // Put new
+        const item = {
+            Date: { S: newDate },
+            ItemType: { S: newItemType },
+            VariationName: { S: newVariationName },
+            UnitPrice: { N: unitPrice.toString() }
+        };
+        if (quantityPackets !== undefined) item.Quantity_Packets = { N: quantityPackets.toString() };
+        if (quantityPcs !== undefined) item.Quantity_Pcs = { N: quantityPcs.toString() };
+        await client.send(new PutItemCommand({
+            TableName: "Stock_Entries",
+            Item: item
+        }));
+    } else {
+        // Update in place
+        let updateExpr = "SET UnitPrice = :u";
+        let exprAttr = { ":u": { N: unitPrice.toString() } };
+        if (quantityPackets !== undefined) {
+            updateExpr += ", Quantity_Packets = :q";
+            exprAttr[":q"] = { N: quantityPackets.toString() };
+        }
+        if (quantityPcs !== undefined) {
+            updateExpr += ", Quantity_Pcs = :p";
+            exprAttr[":p"] = { N: quantityPcs.toString() };
+        }
+        await client.send(new UpdateItemCommand({
+            TableName: "Stock_Entries",
+            Key: {
+                Date: { S: originalDate },
+                ItemType: { S: originalItemType },
+                VariationName: { S: originalVariationName }
+            },
+            UpdateExpression: updateExpr,
+            ExpressionAttributeValues: exprAttr
+        }));
+    }
+};
+
+export const updateMainStock = async ({
+    tableName,
+    itemType,
+    variationName,
+    quantity,
+    unitPrice,
+    token
+}) => {
+    const client = await createDynamoDBClient(token);
+    const quantityField = tableName === "Retail_Stock" ? "Quantity_pcs" : "Quantity_packets";
+    let updateExpr = `SET ${quantityField} = :q, UnitPrice = :u`;
+    let exprAttr = {
+        ":q": { N: quantity.toString() },
+        ":u": { N: unitPrice.toString() }
+    };
+    await client.send(new UpdateItemCommand({
+        TableName: tableName,
+        Key: {
+            ItemType: { S: itemType },
+            VariationName: { S: variationName }
+        },
+        UpdateExpression: updateExpr,
+        ExpressionAttributeValues: exprAttr
+    }));
+};
+
+export const fetchStockEntries = async (token) => {
+    const client = await createDynamoDBClient(token);
+    const command = new ScanCommand({ TableName: "Stock_Entries" });
+    const response = await client.send(command);
+    const entries = (response.Items || []).map((item) => {
+        const isWholesale = !!item.Quantity_Packets;
+        const quantity = Number(isWholesale ? item.Quantity_Packets?.N : item.Quantity_Pcs?.N || 0);
+        const unitPrice = Number(item.UnitPrice?.N || 0);
+        const totalValue = isWholesale
+            ? unitPrice * quantity * 500
+            : unitPrice * quantity;
+        return {
+            id: `${item.Date?.S}-${item.ItemType?.S}-${item.VariationName?.S}-${Math.random().toString(36).slice(2, 8)}`,
+            date: item.Date?.S || "",
+            itemType: item.ItemType?.S || "",
+            variationName: item.VariationName?.S || "",
+            quantity,
+            unitPrice,
+            totalValue,
+            isWholesale,
+        };
+    });
+    // Sort by date descending
+    return entries.sort((a, b) => b.date.localeCompare(a.date));
 };
