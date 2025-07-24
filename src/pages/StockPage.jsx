@@ -36,6 +36,11 @@ function StockPage() {
   const [stockEntries, setStockEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
 
+  // Calculate total values
+  const retailTotalValue = retailStock.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+  const wholesaleTotalValue = wholesaleStock.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+  const allTotalValue = retailTotalValue + wholesaleTotalValue;
+
   // Check authentication status
   const checkAuthStatus = async () => {
     try {
@@ -339,6 +344,22 @@ function StockPage() {
           <div className="mb-6">
             <h1 className="text-2xl font-semibold text-gray-900 mb-2">Stock Management</h1>
             <p className="text-gray-600">Manage your retail and wholesale inventory</p>
+          </div>
+
+          {/* Totals Summary */}
+          <div className="mb-6 flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[180px] bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="text-xs text-blue-700 font-semibold mb-1">All Stock Value</div>
+              <div className="text-2xl font-bold text-blue-900">${allTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            </div>
+            <div className="flex-1 min-w-[180px] bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="text-xs text-green-700 font-semibold mb-1">Retail Stock Value</div>
+              <div className="text-2xl font-bold text-green-900">${retailTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            </div>
+            <div className="flex-1 min-w-[180px] bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="text-xs text-yellow-700 font-semibold mb-1">Wholesale Stock Value</div>
+              <div className="text-2xl font-bold text-yellow-900">${wholesaleTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            </div>
           </div>
 
           {/* Controls */}
