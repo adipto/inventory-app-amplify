@@ -134,10 +134,14 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             // --- Insert into Stock_Entries if this is a new item (not edit) ---
             if (!isEdit) {
                 // Prepare item for Stock_Entries
+                const timestamp = new Date().toISOString();
+                const stockTypeKey = `${stockType}#${finalVariation}#${timestamp}`;
                 const stockEntryItem = {
                     Date: { S: date },
+                    StockType_VariationName_Timestamp: { S: stockTypeKey },
                     ItemType: { S: itemType },
                     VariationName: { S: finalVariation },
+                    StockType: { S: stockType },
                     UnitPrice: { N: unitPrice.toString() },
                 };
                 if (stockType === "Wholesale") {

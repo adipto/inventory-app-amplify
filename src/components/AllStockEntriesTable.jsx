@@ -31,9 +31,14 @@ function AllStockEntriesTable({ entries, onRefresh, loading }) {
             const session = await fetchAuthSession();
             const token = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
             // 1. Delete from Stock_Entries
-            const entryDate = deleteEntry.Date || deleteEntry.date;
-            const entryVariationName = deleteEntry.VariationName || deleteEntry.variationName;
-            await deleteStockItem("Stock_Entries", entryDate, entryVariationName, token);
+            const entryDate = deleteEntry.date || deleteEntry.Date;
+            const entrySortKey = deleteEntry.StockType_VariationName_Timestamp;
+            if (!entrySortKey) {
+                setError("Failed to delete entry. Sort key is missing.");
+                setIsDeleting(false);
+                return;
+            }
+            await deleteStockItem("Stock_Entries", entryDate, entrySortKey, token);
             // 2. Subtract quantity from main stock table
             const tableName = deleteEntry.isWholesale ? "Wholesale_Stock" : "Retail_Stock";
             const mainItemType = deleteEntry.itemType || deleteEntry.ItemType;
@@ -47,11 +52,11 @@ function AllStockEntriesTable({ entries, onRefresh, loading }) {
                 tableName,
                 itemType: mainItemType,
                 variationName: mainVariationName,
-                quantityToDeduct: deleteEntry.quantity,
+                quantityToDeduct: deleteEntry.quantityPcs || deleteEntry.quantityPackets || deleteEntry.quantity,
                 token
             });
             setDeleteEntry(null);
-            if (onRefresh) onRefresh();
+            if (onRefresh) await onRefresh();
         } catch (err) {
             setError("Failed to delete entry. " + (err.message || ""));
         } finally {
@@ -98,7 +103,8 @@ function AllStockEntriesTable({ entries, onRefresh, loading }) {
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Type</th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Variation</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (Pcs)</th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (Packets)</th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -111,7 +117,8 @@ function AllStockEntriesTable({ entries, onRefresh, loading }) {
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.itemType}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.variationName}</td>
-                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantity}</td>
+                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantityPcs}</td>
+                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantityPackets}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">${entry.unitPrice.toFixed(2)}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">${entry.totalValue.toFixed(2)}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -123,7 +130,7 @@ function AllStockEntriesTable({ entries, onRefresh, loading }) {
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="7" className="px-6 py-12 text-center text-gray-500">No stock entries found.</td>
+                            <td colSpan="8" className="px-6 py-12 text-center text-gray-500">No stock entries found.</td>
                         </tr>
                     )}
                 </tbody>

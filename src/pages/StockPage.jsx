@@ -328,6 +328,12 @@ function StockPage() {
     fetchEntries();
   };
 
+  // Combined refresh for both main stock and entries
+  const handleAllStockRefresh = async () => {
+    await fetchData();
+    await fetchEntries();
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -782,7 +788,7 @@ function StockPage() {
           <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">All Stock Entries</h2>
           <AllStockEntriesTable
             entries={stockEntries}
-            onRefresh={fetchEntries}
+            onRefresh={handleAllStockRefresh}
             loading={entriesLoading}
           />
         </main>

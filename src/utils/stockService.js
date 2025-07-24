@@ -37,18 +37,18 @@ export const fetchStock = async (tableName, token) => {
     return stock;
 };
 
-export const deleteStockItem = async (tableName, arg1, arg2, arg3, arg4) => {
+export const deleteStockItem = async (tableName, arg1, arg2, arg3, arg4, arg5) => {
     let command;
     if (tableName === "Stock_Entries") {
-        // (tableName, date, variationName, token)
+        // (tableName, date, sortKey, token)
         const date = arg1;
-        const variationName = arg2;
+        const sortKey = arg2;
         const token = arg3;
         const client = await createDynamoDBClient(token);
         const keyObj = {
-            Date: { S: date }
+            Date: { S: date },
+            StockType_VariationName_Timestamp: { S: sortKey }
         };
-        console.log("[deleteStockItem] Deleting from Stock_Entries with key:", keyObj);
         command = new DeleteItemCommand({
             TableName: tableName,
             Key: keyObj
@@ -81,11 +81,6 @@ export const deductFromMainStock = async ({
 }) => {
     const client = await createDynamoDBClient(token);
     const quantityField = tableName === "Retail_Stock" ? "Quantity_pcs" : "Quantity_packets";
-    console.log("[deductFromMainStock] Looking up:", { tableName, itemType, variationName, quantityToDeduct });
-    console.log("[deductFromMainStock] Key types:", {
-        itemType, typeOfItemType: typeof itemType,
-        variationName, typeOfVariationName: typeof variationName
-    });
     // Get current item
     const getCommand = new GetItemCommand({
         TableName: tableName,
@@ -98,8 +93,6 @@ export const deductFromMainStock = async ({
     if (!response.Item) {
         throw new Error(`[deductFromMainStock] Main stock item not found for ItemType='${itemType}', VariationName='${variationName}' in table '${tableName}'.`);
     }
-    console.log("[deductFromMainStock] DynamoDB item:", response.Item);
-    console.log("[deductFromMainStock] quantityField:", quantityField);
     if (!response.Item[quantityField]) {
         throw new Error(`[deductFromMainStock] quantityField '${quantityField}' not found in item. Item: ${JSON.stringify(response.Item)}`);
     }
@@ -286,21 +279,19 @@ export const fetchStockEntries = async (token) => {
     const command = new ScanCommand({ TableName: "Stock_Entries" });
     const response = await client.send(command);
     const entries = (response.Items || []).map((item) => {
-        const isWholesale = !!item.Quantity_Packets;
-        const quantity = Number(isWholesale ? item.Quantity_Packets?.N : item.Quantity_Pcs?.N || 0);
-        const unitPrice = Number(item.UnitPrice?.N || 0);
-        const totalValue = isWholesale
-            ? unitPrice * quantity * 500
-            : unitPrice * quantity;
         return {
             id: `${item.Date?.S}-${item.ItemType?.S}-${item.VariationName?.S}-${Math.random().toString(36).slice(2, 8)}`,
             date: item.Date?.S || "",
             itemType: item.ItemType?.S || "",
             variationName: item.VariationName?.S || "",
-            quantity,
-            unitPrice,
-            totalValue,
-            isWholesale,
+            quantityPcs: item.Quantity_Pcs ? Number(item.Quantity_Pcs.N) : "",
+            quantityPackets: item.Quantity_Packets ? Number(item.Quantity_Packets.N) : "",
+            unitPrice: Number(item.UnitPrice?.N || 0),
+            totalValue: item.Quantity_Packets
+                ? Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Packets?.N || 0) * 500
+                : Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Pcs?.N || 0),
+            isWholesale: !!item.Quantity_Packets,
+            StockType_VariationName_Timestamp: item.StockType_VariationName_Timestamp?.S,
         };
     });
     // Sort by date descending
