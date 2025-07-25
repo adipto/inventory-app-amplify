@@ -7,6 +7,7 @@ import StockPage from './pages/StockPage';
 import Reports from './pages/Reports';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { getCurrentUser } from 'aws-amplify/auth';
+import CapitalManagement from './pages/CapitalManagement';
 
 // Protected route wrapper using Amplify Authenticator
 function RequireAuth({ children }) {
@@ -66,6 +67,14 @@ function App() {
           element={
             <RequireAuth>
               <StockPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/capital-management"
+          element={
+            <RequireAuth>
+              <CapitalManagement />
             </RequireAuth>
           }
         />

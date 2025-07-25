@@ -40,6 +40,7 @@ function Sidebar() {
     { path: "/", name: "Dashboard", icon: <Home size={20} /> },
     { path: "/stock", name: "Stock Management", icon: <Package size={20} /> },
     { path: "/customers", name: "Customers", icon: <Users size={20} /> },
+    { path: "/capital-management", name: "Capital Management", icon: <BarChart size={20} /> },
     { path: "/reports", name: "Reports", icon: <BarChart size={20} /> },
     // Add more navigation items as needed
   ];
