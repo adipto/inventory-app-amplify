@@ -11,7 +11,8 @@ import {
   RefreshCw, 
   DollarSign, 
   TrendingUp, 
-  TrendingDown
+  TrendingDown,
+  Banknote
 } from "lucide-react";
 
 function CapitalManagementTable() {
@@ -19,6 +20,9 @@ function CapitalManagementTable() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fixed initial capital value
+  const INITIAL_CAPITAL = 200000.00;
 
   // Fetch capital management data
   const fetchCapitalData = async () => {
@@ -86,6 +90,11 @@ function CapitalManagementTable() {
     return parseFloat(value);
   };
 
+  // Calculate dynamic total capital
+  const calculateTotalCapital = (currentStockValue) => {
+    return currentStockValue > INITIAL_CAPITAL ? currentStockValue : INITIAL_CAPITAL;
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -126,6 +135,9 @@ function CapitalManagementTable() {
     updatedStock: getNumericValue(capitalData.UpdatedStock?.N)
   };
 
+  // Calculate the dynamic total capital
+  const totalCapital = calculateTotalCapital(data.remainingValueOfCurrentStock);
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       {/* Header */}
@@ -145,14 +157,28 @@ function CapitalManagementTable() {
 
       {/* Summary Cards */}
       <div className="p-6 border-b border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {/* Initial Capital */}
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <Banknote size={20} className="text-purple-600 mr-2" />
+              <div>
+                <p className="text-sm font-medium text-purple-700">Initial Capital</p>
+                <p className="text-xl font-bold text-purple-900">
+                  ${formatCurrency(INITIAL_CAPITAL)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Total Capital - Dynamic */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center">
               <DollarSign size={20} className="text-blue-600 mr-2" />
               <div>
                 <p className="text-sm font-medium text-blue-700">Total Capital</p>
                 <p className="text-xl font-bold text-blue-900">
-                  ${formatCurrency(data.totalCapitalInvestment)}
+                  ${formatCurrency(totalCapital)}
                 </p>
               </div>
             </div>
@@ -352,4 +378,4 @@ function CapitalManagementTable() {
   );
 }
 
-export default CapitalManagementTable; 
+export default CapitalManagementTable;
