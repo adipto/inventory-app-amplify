@@ -132,10 +132,10 @@ function TransactionTable({ initialTransactionType }) {
         return;
       }
 
-      // Fetch transactions in parallel
+      // Fetch transactions in parallel with large limit to get all transactions
       const [retailData, wholesaleData] = await Promise.all([
-        fetchRetailTransactions(idToken),
-        fetchWholesaleTransactions(idToken),
+        fetchRetailTransactions(idToken, 1000), // Large limit to get all transactions
+        fetchWholesaleTransactions(idToken, 1000), // Large limit to get all transactions
       ]);
 
       setRetailTransactions(retailData.items);
@@ -413,15 +413,8 @@ function TransactionTable({ initialTransactionType }) {
     setRetailLastEvaluatedKeys([null]);
     setWholesaleLastEvaluatedKeys([null]);
     
-    // Refresh the appropriate page data based on current transaction type
-    if (transactionType === "retail") {
-      await fetchRetailPage(1);
-    } else if (transactionType === "wholesale") {
-      await fetchWholesalePage(1);
-    } else {
-      // For 'all' view, refresh both
-      await Promise.all([fetchRetailPage(1), fetchWholesalePage(1)]);
-    }
+    // Refresh ALL data to ensure new transactions appear
+    await fetchData();
     
     // Update capital management after transaction
     try {
@@ -445,15 +438,8 @@ function TransactionTable({ initialTransactionType }) {
     setRetailLastEvaluatedKeys([null]);
     setWholesaleLastEvaluatedKeys([null]);
     
-    // Refresh the appropriate page data based on current transaction type
-    if (transactionType === "retail") {
-      await fetchRetailPage(1);
-    } else if (transactionType === "wholesale") {
-      await fetchWholesalePage(1);
-    } else {
-      // For 'all' view, refresh both
-      await Promise.all([fetchRetailPage(1), fetchWholesalePage(1)]);
-    }
+    // Refresh ALL data to ensure new transactions appear
+    await fetchData();
     
     // Update capital management after transaction modification
     try {
@@ -475,15 +461,8 @@ function TransactionTable({ initialTransactionType }) {
     setRetailLastEvaluatedKeys([null]);
     setWholesaleLastEvaluatedKeys([null]);
     
-    // Refresh the appropriate page data based on current transaction type
-    if (transactionType === "retail") {
-      await fetchRetailPage(1);
-    } else if (transactionType === "wholesale") {
-      await fetchWholesalePage(1);
-    } else {
-      // For 'all' view, refresh both
-      await Promise.all([fetchRetailPage(1), fetchWholesalePage(1)]);
-    }
+    // Refresh ALL data to ensure new transactions appear
+    await fetchData();
   };
   const handleTransactionTypeChange = (type) => setTransactionType(type);
   const handleNewTransactionClick = async () => {
