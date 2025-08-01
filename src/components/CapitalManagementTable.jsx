@@ -5,14 +5,17 @@ import {
   getCapitalManagementData, 
   refreshCapitalManagement,
   updateAfterTransaction,
-  updateAfterStockAddition 
+  updateAfterStockAddition,
+  updateCapitalManagementData
 } from "../utils/capitalManagementService";
 import { 
   RefreshCw, 
   DollarSign, 
   TrendingUp, 
   TrendingDown,
-  Banknote
+  Banknote,
+  Minus,
+  X
 } from "lucide-react";
 
 function CapitalManagementTable() {
@@ -20,6 +23,11 @@ function CapitalManagementTable() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   // Fixed initial capital value
   const INITIAL_CAPITAL = 200000.00;
@@ -93,6 +101,70 @@ function CapitalManagementTable() {
   // Calculate dynamic total capital
   const calculateTotalCapital = (currentStockValue) => {
     return currentStockValue > INITIAL_CAPITAL ? currentStockValue : INITIAL_CAPITAL;
+  };
+
+  // Handle withdraw profit button click
+  const handleWithdrawClick = () => {
+    setWithdrawAmount("");
+    setShowWithdrawModal(true);
+  };
+
+  // Handle withdraw amount submission
+  const handleWithdrawSubmit = () => {
+    const amount = parseFloat(withdrawAmount);
+    
+    if (isNaN(amount) || amount <= 0) {
+      setShowErrorDialog(true);
+      return;
+    }
+
+    if (amount > data.cashInHand) {
+      setShowErrorDialog(true);
+      return;
+    }
+
+    setShowWithdrawModal(false);
+    setShowConfirmDialog(true);
+  };
+
+  // Handle confirmed withdrawal
+  const handleConfirmWithdraw = async () => {
+    try {
+      setIsWithdrawing(true);
+      const amount = parseFloat(withdrawAmount);
+      const newCashInHand = data.cashInHand - amount;
+
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+      
+      if (!idToken) {
+        throw new Error("No valid authentication token found");
+      }
+
+      // Update the cash in hand value
+      const updates = {
+        CashInHand: { N: newCashInHand.toString() }
+      };
+
+      await updateCapitalManagementData(idToken, updates);
+      await fetchCapitalData();
+      
+      setShowConfirmDialog(false);
+      setWithdrawAmount("");
+    } catch (err) {
+      console.error("Error withdrawing profit:", err);
+      setError("Failed to withdraw profit. Please try again.");
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
+  // Close all modals
+  const closeAllModals = () => {
+    setShowWithdrawModal(false);
+    setShowConfirmDialog(false);
+    setShowErrorDialog(false);
+    setWithdrawAmount("");
   };
 
   if (isLoading) {
@@ -323,8 +395,17 @@ function CapitalManagementTable() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     ${formatCurrency(data.remainingValueOfCurrentStock)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${formatCurrency(data.cashInHand)}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 relative">
+                    <div className="flex flex-col items-start space-y-2">
+                      <span>${formatCurrency(data.cashInHand)}</span>
+                      <button
+                        onClick={handleWithdrawClick}
+                        className="flex items-center px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
+                      >
+                        <Minus size={12} className="mr-1" />
+                        Withdraw Profit
+                      </button>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     -
@@ -372,6 +453,111 @@ function CapitalManagementTable() {
           <p className="text-xs text-gray-500">
             Last updated: {new Date(capitalData.LastUpdated.S).toLocaleString()}
           </p>
+        </div>
+      )}
+
+      {/* Withdraw Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-90vw">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Withdraw Profit</h3>
+              <button
+                onClick={closeAllModals}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                Available Cash: <span className="font-semibold">${formatCurrency(data.cashInHand)}</span>
+              </p>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Withdrawal Amount
+              </label>
+              <input
+                type="number"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                placeholder="Enter amount to withdraw"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                step="0.01"
+                min="0"
+              />
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={closeAllModals}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWithdrawSubmit}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-90vw">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Withdraw?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to withdraw <span className="font-semibold">${formatCurrency(parseFloat(withdrawAmount))}</span> from your cash in hand?
+            </p>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={closeAllModals}
+                disabled={isWithdrawing}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                onClick={handleConfirmWithdraw}
+                disabled={isWithdrawing}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center justify-center"
+              >
+                {isWithdrawing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </>
+                ) : (
+                  'Yes'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Dialog */}
+      {showErrorDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-90vw">
+            <h3 className="text-lg font-semibold text-red-600 mb-4">Error</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              The withdrawal amount cannot exceed your available cash in hand (${formatCurrency(data.cashInHand)}) or be invalid.
+            </p>
+            
+            <button
+              onClick={closeAllModals}
+              className="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+            >
+              OK
+            </button>
+          </div>
         </div>
       )}
     </div>
