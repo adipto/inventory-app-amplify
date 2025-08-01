@@ -393,6 +393,16 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
             }
             // --- End Stock Update ---
 
+            // --- Update Capital Management After Transaction ---
+            try {
+                const { updateAfterTransaction } = await import("../utils/capitalManagementService");
+                await updateAfterTransaction(idToken);
+            } catch (capitalError) {
+                console.error("Error updating capital management:", capitalError);
+                // Don't throw error here as transaction was successful
+            }
+            // --- End Capital Management Update ---
+
             alert(`Transaction ${isEditMode ? 'updated' : 'added'} successfully!`);
             onClose();
 
@@ -618,7 +628,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
                                     {/* COGS (auto-filled) */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            {productType === "Retail" ? "COGS (per pc)" : "COGS (per packet)"}
+                                            COGS (per pc)
                                         </label>
                                         <input
                                             type="text"

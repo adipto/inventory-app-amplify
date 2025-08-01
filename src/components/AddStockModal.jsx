@@ -244,6 +244,16 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                 alert("Stock item added successfully");
             }
 
+            // --- Update Capital Management After Stock Addition ---
+            try {
+                const { updateAfterStockAddition } = await import("../utils/capitalManagementService");
+                await updateAfterStockAddition(idToken);
+            } catch (capitalError) {
+                console.error("Error updating capital management:", capitalError);
+                // Don't throw error here as stock was added successfully
+            }
+            // --- End Capital Management Update ---
+
             if (onStockAdded) {
                 onStockAdded();
             }

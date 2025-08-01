@@ -1,0 +1,13 @@
+{
+  "name": "create-capital-management-table",
+  "version": "1.0.0",
+  "description": "Script to create Capital_Management table in DynamoDB",
+  "main": "create-capital-management-table.js",
+  "scripts": {
+    "create-table": "node create-capital-management-table.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0"
+  }
+} 

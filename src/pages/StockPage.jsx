@@ -321,11 +321,23 @@ function StockPage() {
     document.body.removeChild(a);
   };
 
-  // Update handleAddModalClose to also fetch entries
-  const handleAddModalClose = () => {
+  // Update handleAddModalClose to also fetch entries and update capital management
+  const handleAddModalClose = async () => {
     setIsAddModalOpen(false);
     setItemToEdit(null);
-    fetchEntries();
+    await fetchEntries();
+    
+    // Update capital management after stock addition
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+      if (idToken) {
+        const { updateAfterStockAddition } = await import("../utils/capitalManagementService");
+        await updateAfterStockAddition(idToken);
+      }
+    } catch (error) {
+      console.error("Error updating capital management:", error);
+    }
   };
 
   // Combined refresh for both main stock and entries

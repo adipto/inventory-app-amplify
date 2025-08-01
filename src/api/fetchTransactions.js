@@ -17,8 +17,17 @@ export const fetchRetailTransactions = async (idToken, limit = 10, startKey = nu
         }
         const command = new ScanCommand(params);
         const response = await client.send(command);
+        const items = response.Items.map(item => unmarshall(item));
+        
+        // Sort by date (newest first) to ensure latest transactions appear first
+        items.sort((a, b) => {
+            const dateA = new Date(a.Date || 0);
+            const dateB = new Date(b.Date || 0);
+            return dateB - dateA; // Descending order (newest first)
+        });
+        
         return {
-            items: response.Items.map(item => unmarshall(item)),
+            items: items,
             lastEvaluatedKey: response.LastEvaluatedKey || null,
         };
     } catch (error) {
@@ -40,8 +49,17 @@ export const fetchWholesaleTransactions = async (idToken, limit = 10, startKey =
         }
         const command = new ScanCommand(params);
         const response = await client.send(command);
+        const items = response.Items.map(item => unmarshall(item));
+        
+        // Sort by date (newest first) to ensure latest transactions appear first
+        items.sort((a, b) => {
+            const dateA = new Date(a.Date || 0);
+            const dateB = new Date(b.Date || 0);
+            return dateB - dateA; // Descending order (newest first)
+        });
+        
         return {
-            items: response.Items.map(item => unmarshall(item)),
+            items: items,
             lastEvaluatedKey: response.LastEvaluatedKey || null,
         };
     } catch (error) {

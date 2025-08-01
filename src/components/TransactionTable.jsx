@@ -1,8 +1,8 @@
 // src/components/TransactionTable.jsx
-import { signInWithRedirect } from "aws-amplify/auth";
+import { signInWithRedirect, fetchAuthSession } from "aws-amplify/auth";
 import { DeleteItemCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { fromCognitoIdentityPool } from "@aws-sdk/credential-provider-cognito-identity";
-import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
+import { getCurrentUser } from "aws-amplify/auth";
 import { Hub } from "aws-amplify/utils";
 import { format } from "date-fns";
 import {
@@ -405,19 +405,86 @@ function TransactionTable({ initialTransactionType }) {
   };
 
   // Handle modal closures
-  const handleModalClose = () => {
+  const handleModalClose = async () => {
     setIsModalOpen(false);
-    fetchData();
+    
+    // Reset pagination and refresh data
+    setCurrentPage(1);
+    setRetailLastEvaluatedKeys([null]);
+    setWholesaleLastEvaluatedKeys([null]);
+    
+    // Refresh the appropriate page data based on current transaction type
+    if (transactionType === "retail") {
+      await fetchRetailPage(1);
+    } else if (transactionType === "wholesale") {
+      await fetchWholesalePage(1);
+    } else {
+      // For 'all' view, refresh both
+      await Promise.all([fetchRetailPage(1), fetchWholesalePage(1)]);
+    }
+    
+    // Update capital management after transaction
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+      if (idToken) {
+        const { updateAfterTransaction } = await import("../utils/capitalManagementService");
+        await updateAfterTransaction(idToken);
+      }
+    } catch (error) {
+      console.error("Error updating capital management:", error);
+    }
   };
 
-  const handleModifyModalClose = () => {
+  const handleModifyModalClose = async () => {
     setIsModifyModalOpen(false);
     setSelectedTransaction(null);
-    fetchData();
+    
+    // Reset pagination and refresh data
+    setCurrentPage(1);
+    setRetailLastEvaluatedKeys([null]);
+    setWholesaleLastEvaluatedKeys([null]);
+    
+    // Refresh the appropriate page data based on current transaction type
+    if (transactionType === "retail") {
+      await fetchRetailPage(1);
+    } else if (transactionType === "wholesale") {
+      await fetchWholesalePage(1);
+    } else {
+      // For 'all' view, refresh both
+      await Promise.all([fetchRetailPage(1), fetchWholesalePage(1)]);
+    }
+    
+    // Update capital management after transaction modification
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+      if (idToken) {
+        const { updateAfterTransaction } = await import("../utils/capitalManagementService");
+        await updateAfterTransaction(idToken);
+      }
+    } catch (error) {
+      console.error("Error updating capital management:", error);
+    }
   };
 
   // Handle various actions
-  const handleRefresh = () => fetchData();
+  const handleRefresh = async () => {
+    // Reset pagination and refresh data
+    setCurrentPage(1);
+    setRetailLastEvaluatedKeys([null]);
+    setWholesaleLastEvaluatedKeys([null]);
+    
+    // Refresh the appropriate page data based on current transaction type
+    if (transactionType === "retail") {
+      await fetchRetailPage(1);
+    } else if (transactionType === "wholesale") {
+      await fetchWholesalePage(1);
+    } else {
+      // For 'all' view, refresh both
+      await Promise.all([fetchRetailPage(1), fetchWholesalePage(1)]);
+    }
+  };
   const handleTransactionTypeChange = (type) => setTransactionType(type);
   const handleNewTransactionClick = async () => {
     if (!isAuthenticated) {
