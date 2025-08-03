@@ -119,8 +119,8 @@ function AllStockEntriesTable({ entries, onRefresh, loading }) {
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.variationName}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantityPcs}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantityPackets}</td>
-                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">${entry.unitPrice.toFixed(2)}</td>
-                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">${entry.totalValue.toFixed(2)}</td>
+                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">TK {entry.unitPrice.toFixed(2)}</td>
+                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">TK {entry.totalValue.toFixed(2)}</td>
                                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                                     <button className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50" title="Delete" onClick={() => handleDeleteClick(entry)}>
                                         Delete

@@ -307,116 +307,136 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         );
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    // Enhanced date/time handling section for AddTransactionModal.jsx
+// Replace the handleSubmit function in your AddTransactionModal.jsx
 
-        if (!selectedCustomer) {
-            alert("Please select a customer");
-            return;
+const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!selectedCustomer) {
+        alert("Please select a customer");
+        return;
+    }
+
+    if (!productVariation) {
+        alert("Please select product variation");
+        return;
+    }
+
+    if (!quantity || !sellingPrice) {
+        alert("Please fill in all required fields");
+        return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+        const dynamoClient = await createDynamoDBClient();
+
+        // Use existing transaction ID for edit mode, generate new for add mode
+        const transactionId = isEditMode ? transaction.TransactionID : generateTransactionId();
+
+        // FIXED: Proper timezone handling for date/time
+        const now = selectedDateTime || new Date();
+        
+        // Get user's timezone offset in minutes
+        const timezoneOffset = now.getTimezoneOffset();
+        
+        // Adjust for timezone to get local date/time
+        const localDateTime = new Date(now.getTime() - (timezoneOffset * 60000));
+        
+        // Format date as YYYY-MM-DD in local timezone
+        const formattedDate = localDateTime.toISOString().split('T')[0];
+        
+        // Format time as HH:MM:SS in local timezone
+        const hours = localDateTime.getHours().toString().padStart(2, '0');
+        const minutes = localDateTime.getMinutes().toString().padStart(2, '0');
+        const seconds = localDateTime.getSeconds().toString().padStart(2, '0');
+        const formattedTime = `${hours}:${minutes}:${seconds}`;
+
+        console.log('Saving transaction with date/time:', {
+            originalDateTime: now,
+            formattedDate,
+            formattedTime,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        });
+
+        // Determine which table to use based on product type
+        const tableName = productType === "Retail"
+            ? RETAIL_TABLE_NAME
+            : WHOLESALE_TABLE_NAME;
+
+        // Common fields
+        const transactionData = {
+            TransactionID: { S: transactionId },
+            CustomerID: { S: customerId },
+            Date: { S: formattedDate },
+            Time: { S: formattedTime },
+            ProductName: { S: productCategory },
+            ProductVariation: { S: productVariation },
+            NetProfit: { N: netProfit.toString() },
+            // Add timestamp for easier sorting (optional but recommended)
+            Timestamp: { N: now.getTime().toString() }
+        };
+
+        // Add type-specific fields
+        if (productType === "Retail") {
+            transactionData.COGS_Per_Pc = { N: cogs.toString() };
+            transactionData.Quantity_Pcs = { N: quantity.toString() };
+            transactionData.SellingPrice_Per_Pc = { N: sellingPrice.toString() };
+        } else {
+            transactionData.COGS_Per_Packet = { N: cogs.toString() };
+            transactionData.Quantity_Packets = { N: quantity.toString() };
+            transactionData.SellingPrice_Per_Packet = { N: sellingPrice.toString() };
         }
 
-        if (!productVariation) {
-            alert("Please select product variation");
-            return;
-        }
+        await dynamoClient.send(
+            new PutItemCommand({
+                TableName: tableName,
+                Item: transactionData,
+            })
+        );
 
-        if (!quantity || !sellingPrice) {
-            alert("Please fill in all required fields");
-            return;
-        }
-
-        setIsSubmitting(true);
-
+        // --- Update Stock After Transaction ---
+        const session = await fetchAuthSession();
+        const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+        const stockTable = productType === "Retail" ? RETAIL_STOCK_TABLE : WHOLESALE_STOCK_TABLE;
+        const quantityToSubtract = parseInt(quantity, 10);
+        
         try {
-            const dynamoClient = await createDynamoDBClient();
-
-            // Use existing transaction ID for edit mode, generate new for add mode
-            const transactionId = isEditMode ? transaction.TransactionID : generateTransactionId();
-
-            // Format date as YYYY-MM-DD
-            const formattedDate = selectedDateTime.toISOString().split('T')[0];
-
-            // Format time as HH:MM:SS
-            const formattedTime = selectedDateTime.toTimeString().split(' ')[0];
-
-            // Determine which table to use based on product type
-            const tableName = productType === "Retail"
-                ? RETAIL_TABLE_NAME
-                : WHOLESALE_TABLE_NAME;
-
-            // Common fields
-            const transactionData = {
-                TransactionID: { S: transactionId },
-                CustomerID: { S: customerId },
-                Date: { S: formattedDate },
-                Time: { S: formattedTime },
-                ProductName: { S: productCategory },
-                ProductVariation: { S: productVariation },
-                NetProfit: { N: netProfit.toString() },
-            };
-
-            // Add type-specific fields
-            if (productType === "Retail") {
-                transactionData.COGS_Per_Pc = { N: cogs.toString() };
-                transactionData.Quantity_Pcs = { N: quantity.toString() };
-                transactionData.SellingPrice_Per_Pc = { N: sellingPrice.toString() };
-            } else {
-                transactionData.COGS_Per_Packet = { N: cogs.toString() };
-                transactionData.Quantity_Packets = { N: quantity.toString() };
-                transactionData.SellingPrice_Per_Packet = { N: sellingPrice.toString() };
-            }
-
-            await dynamoClient.send(
-                new PutItemCommand({
-                    TableName: tableName,
-                    Item: transactionData,
-                })
-            );
-
-            // --- Update Stock After Transaction ---
-            // Get the current auth session for token
-            const session = await fetchAuthSession();
-            const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
-            // Determine stock table and quantity to subtract
-            const stockTable = productType === "Retail" ? RETAIL_STOCK_TABLE : WHOLESALE_STOCK_TABLE;
-            const quantityToSubtract = parseInt(quantity, 10);
-            try {
-                await updateStockAfterTransaction({
-                    tableName: stockTable,
-                    itemType: productCategory,
-                    variationName: productVariation,
-                    quantityToSubtract,
-                    token: idToken,
-                });
-            } catch (stockError) {
-                throw stockError;
-            }
-            // --- End Stock Update ---
-
-            // --- Update Capital Management After Transaction ---
-            try {
-                const { updateAfterTransaction } = await import("../utils/capitalManagementService");
-                await updateAfterTransaction(idToken);
-            } catch (capitalError) {
-                console.error("Error updating capital management:", capitalError);
-                // Don't throw error here as transaction was successful
-            }
-            // --- End Capital Management Update ---
-
-            alert(`Transaction ${isEditMode ? 'updated' : 'added'} successfully!`);
-            onClose();
-
-        } catch (error) {
-            console.error(`Error ${isEditMode ? 'updating' : 'adding'} transaction:`, error);
-            if (error.name === "ConditionalCheckFailedException") {
-                alert("Not enough stock available for this product/variation. Please check your stock levels.");
-            } else {
-                alert(`Failed to ${isEditMode ? 'update' : 'add'} transaction. Please try again.`);
-            }
-        } finally {
-            setIsSubmitting(false);
+            await updateStockAfterTransaction({
+                tableName: stockTable,
+                itemType: productCategory,
+                variationName: productVariation,
+                quantityToSubtract,
+                token: idToken,
+            });
+        } catch (stockError) {
+            throw stockError;
         }
-    };
+
+        // --- Update Capital Management After Transaction ---
+        try {
+            const { updateAfterTransaction } = await import("../utils/capitalManagementService");
+            await updateAfterTransaction(idToken);
+        } catch (capitalError) {
+            console.error("Error updating capital management:", capitalError);
+        }
+
+        alert(`Transaction ${isEditMode ? 'updated' : 'added'} successfully!`);
+        onClose();
+
+    } catch (error) {
+        console.error(`Error ${isEditMode ? 'updating' : 'adding'} transaction:`, error);
+        if (error.name === "ConditionalCheckFailedException") {
+            alert("Not enough stock available for this product/variation. Please check your stock levels.");
+        } else {
+            alert(`Failed to ${isEditMode ? 'update' : 'add'} transaction. Please try again.`);
+        }
+    } finally {
+        setIsSubmitting(false);
+    }
+};
 
     // Don't render if user is not authenticated
     if (!isAuthenticated) {

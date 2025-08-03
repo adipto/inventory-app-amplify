@@ -221,7 +221,7 @@ function CapitalManagementTable() {
             disabled={isRefreshing}
             className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
-            <RefreshCw size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw size={16} className={`mr-2 TK {isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
@@ -237,7 +237,7 @@ function CapitalManagementTable() {
               <div>
                 <p className="text-sm font-medium text-purple-700">Initial Capital</p>
                 <p className="text-xl font-bold text-purple-900">
-                  ${formatCurrency(INITIAL_CAPITAL)}
+                  TK {formatCurrency(INITIAL_CAPITAL)}
                 </p>
               </div>
             </div>
@@ -250,7 +250,7 @@ function CapitalManagementTable() {
               <div>
                 <p className="text-sm font-medium text-blue-700">Total Capital</p>
                 <p className="text-xl font-bold text-blue-900">
-                  ${formatCurrency(totalCapital)}
+                  TK {formatCurrency(totalCapital)}
                 </p>
               </div>
             </div>
@@ -262,7 +262,7 @@ function CapitalManagementTable() {
               <div>
                 <p className="text-sm font-medium text-green-700">Stock Value Before Last Sale</p>
                 <p className="text-xl font-bold text-green-900">
-                  ${formatCurrency(data.valueOfCurrentStock)}
+                  TK {formatCurrency(data.valueOfCurrentStock)}
                 </p>
               </div>
             </div>
@@ -274,7 +274,7 @@ function CapitalManagementTable() {
               <div>
                 <p className="text-sm font-medium text-emerald-700">Current Stock Value</p>
                 <p className="text-xl font-bold text-emerald-900">
-                  ${formatCurrency(data.remainingValueOfCurrentStock)}
+                  TK {formatCurrency(data.remainingValueOfCurrentStock)}
                 </p>
               </div>
             </div>
@@ -286,7 +286,7 @@ function CapitalManagementTable() {
               <div>
                 <p className="text-sm font-medium text-yellow-700">Cash in Hand</p>
                 <p className="text-xl font-bold text-yellow-900">
-                  ${formatCurrency(data.cashInHand)}
+                  TK {formatCurrency(data.cashInHand)}
                 </p>
               </div>
             </div>
@@ -329,7 +329,7 @@ function CapitalManagementTable() {
                 -
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${formatCurrency(data.initialCashInHand)}
+                TK {formatCurrency(data.initialCashInHand)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 -
@@ -348,10 +348,10 @@ function CapitalManagementTable() {
                 Stock Value Before Last Sale
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${formatCurrency(data.valueOfCurrentStock)}
+                TK {formatCurrency(data.valueOfCurrentStock)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${formatCurrency(data.cashInHand - data.sellingPrice)}
+                TK {formatCurrency(data.cashInHand - data.sellingPrice)}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 -
@@ -375,16 +375,16 @@ function CapitalManagementTable() {
                     -
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-900">
-                    +${formatCurrency(data.sellingPrice)}
+                    +TK {formatCurrency(data.sellingPrice)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-900">
-                    ${formatCurrency(data.cogsForProductSold)}
+                    TK {formatCurrency(data.cogsForProductSold)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-900">
-                    ${formatCurrency(data.sellingPrice)}
+                    TK {formatCurrency(data.sellingPrice)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-900">
-                    ${formatCurrency(data.netProfit)}
+                    TK {formatCurrency(data.netProfit)}
                   </td>
                 </tr>
 
@@ -393,11 +393,11 @@ function CapitalManagementTable() {
                     Value of Current Stock →
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${formatCurrency(data.remainingValueOfCurrentStock)}
+                    TK {formatCurrency(data.remainingValueOfCurrentStock)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 relative">
                     <div className="flex flex-col items-start space-y-2">
-                      <span>${formatCurrency(data.cashInHand)}</span>
+                      <span>TK {formatCurrency(data.cashInHand)}</span>
                       <button
                         onClick={handleWithdrawClick}
                         className="flex items-center px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
@@ -427,10 +427,10 @@ function CapitalManagementTable() {
                   Updated Stock →
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-green-900">
-                  ${formatCurrency(data.valueOfCurrentStock)}
+                  TK {formatCurrency(data.valueOfCurrentStock)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-green-900">
-                  ${formatCurrency(data.cashInHand)}
+                  TK {formatCurrency(data.cashInHand)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-green-900">
                   -
@@ -472,7 +472,7 @@ function CapitalManagementTable() {
             
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-2">
-                Available Cash: <span className="font-semibold">${formatCurrency(data.cashInHand)}</span>
+                Available Cash: <span className="font-semibold">TK {formatCurrency(data.cashInHand)}</span>
               </p>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Withdrawal Amount
@@ -512,7 +512,7 @@ function CapitalManagementTable() {
           <div className="bg-white rounded-lg p-6 w-96 max-w-90vw">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Withdraw?</h3>
             <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to withdraw <span className="font-semibold">${formatCurrency(parseFloat(withdrawAmount))}</span> from your cash in hand?
+              Are you sure you want to withdraw <span className="font-semibold">TK {formatCurrency(parseFloat(withdrawAmount))}</span> from your cash in hand?
             </p>
             
             <div className="flex space-x-3">
@@ -548,7 +548,7 @@ function CapitalManagementTable() {
           <div className="bg-white rounded-lg p-6 w-96 max-w-90vw">
             <h3 className="text-lg font-semibold text-red-600 mb-4">Error</h3>
             <p className="text-sm text-gray-600 mb-6">
-              The withdrawal amount cannot exceed your available cash in hand (${formatCurrency(data.cashInHand)}) or be invalid.
+              The withdrawal amount cannot exceed your available cash in hand (TK {formatCurrency(data.cashInHand)}) or be invalid.
             </p>
             
             <button
