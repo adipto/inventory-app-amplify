@@ -1,198 +1,369 @@
-// src/api/fetchTransactions.js
+// src/api/fetchTransactions.js - Optimized with TimestampIndex GSI
 import { QueryCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 import { createDynamoDBClient } from "../aws/aws-config";
 import { fetchAuthSession } from "aws-amplify/auth";
 
-// Fetch retail transactions using Query with GSI for proper sorting
+// Optimized fetch retail transactions using TimestampIndex GSI
 export const fetchRetailTransactions = async (idToken, limit = 10, startKey = null) => {
     try {
         const client = createDynamoDBClient(idToken);
         
-        // Use Query with GSI that has Date as sort key
-        const params = {
-            TableName: "Transaction_Retail",
-            IndexName: "DateIndex", // You'll need to create this GSI
-            KeyConditionExpression: "#dateAttr = :dateAttr OR #dateAttr BETWEEN :startDate AND :endDate",
-            ExpressionAttributeNames: {
-                "#dateAttr": "Date"
-            },
-            ExpressionAttributeValues: {
-                ":startDate": { S: "2020-01-01" }, // Adjust range as needed
-                ":endDate": { S: new Date().toISOString().split('T')[0] }
-            },
-            ScanIndexForward: false, // Sort descending (newest first)
-            Limit: limit
-        };
-
-        if (startKey) {
-            params.ExclusiveStartKey = startKey;
-        }
-
-        // If GSI is not available yet, fallback to scan with better handling
-        let command;
-        let response;
-        
         try {
-            // Try Query first (requires GSI)
-            command = new QueryCommand(params);
-            response = await client.send(command);
-        } catch (gsiError) {
-            console.log("GSI not available, using enhanced scan method");
-            // Fallback to scan but fetch more items and sort properly
-            const scanParams = {
+            console.log("Using optimized TimestampIndex GSI for retail transactions...");
+            
+            // Use the new TimestampIndex GSI for efficient querying
+            const params = {
                 TableName: "Transaction_Retail",
-                Limit: Math.max(limit * 3, 100), // Fetch more items to ensure we get recent ones
+                IndexName: "TimestampIndex",
+                KeyConditionExpression: "#gsiPk = :gsiPk",
+                ExpressionAttributeNames: {
+                    "#gsiPk": "GSI_PK"
+                },
+                ExpressionAttributeValues: {
+                    ":gsiPk": { S: "ALL" }
+                },
+                ScanIndexForward: false, // Sort descending by Timestamp
+                Limit: limit
             };
+
             if (startKey) {
-                scanParams.ExclusiveStartKey = startKey;
+                params.ExclusiveStartKey = startKey;
             }
-            command = new ScanCommand(scanParams);
-            response = await client.send(command);
+
+            const command = new QueryCommand(params);
+            const response = await client.send(command);
+            
+            if (response.Items && response.Items.length > 0) {
+                const items = response.Items.map(item => unmarshall(item));
+                console.log(`TimestampIndex GSI successful, items found: ${items.length}`);
+                
+                return {
+                    items: items,
+                    lastEvaluatedKey: response.LastEvaluatedKey || null
+                };
+            } else {
+                console.log("No items found with TimestampIndex GSI, falling back to DateIndex");
+                throw new Error("No items found with TimestampIndex GSI");
+            }
+            
+        } catch (gsiError) {
+            console.log("TimestampIndex GSI failed, falling back to DateIndex strategy:", gsiError);
+            
+            // Fallback to the existing DateIndex strategy
+            return await fetchRetailTransactionsDateIndex(client, limit, startKey);
         }
-        
-        const items = response.Items.map(item => unmarshall(item));
-        
-        // Enhanced sorting with proper date/time handling
-        items.sort((a, b) => {
-            // Create full datetime for comparison
-            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
-            
-            // If dates are invalid, fall back to string comparison
-            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-                return (b.Date || '').localeCompare(a.Date || '');
-            }
-            
-            return dateTimeB - dateTimeA; // Descending order (newest first)
-        });
-        
-        // If we fetched more than requested, trim to the requested limit
-        const trimmedItems = items.slice(0, limit);
-        
-        return {
-            items: trimmedItems,
-            lastEvaluatedKey: response.LastEvaluatedKey || null,
-        };
     } catch (error) {
         console.error("Error fetching retail transactions:", error);
         throw error;
     }
 };
 
-// Fetch wholesale transactions using Query with GSI for proper sorting
+// Optimized fetch wholesale transactions using TimestampIndex GSI
 export const fetchWholesaleTransactions = async (idToken, limit = 10, startKey = null) => {
     try {
         const client = createDynamoDBClient(idToken);
         
-        // Use Query with GSI that has Date as sort key
-        const params = {
-            TableName: "Transaction_Wholesale",
-            IndexName: "DateIndex", // You'll need to create this GSI
-            KeyConditionExpression: "#dateAttr BETWEEN :startDate AND :endDate",
-            ExpressionAttributeNames: {
-                "#dateAttr": "Date"
-            },
-            ExpressionAttributeValues: {
-                ":startDate": { S: "2020-01-01" }, // Adjust range as needed
-                ":endDate": { S: new Date().toISOString().split('T')[0] }
-            },
-            ScanIndexForward: false, // Sort descending (newest first)
-            Limit: limit
-        };
-
-        if (startKey) {
-            params.ExclusiveStartKey = startKey;
-        }
-
-        // If GSI is not available yet, fallback to scan with better handling
-        let command;
-        let response;
-        
         try {
-            // Try Query first (requires GSI)
-            command = new QueryCommand(params);
-            response = await client.send(command);
-        } catch (gsiError) {
-            console.log("GSI not available, using enhanced scan method");
-            // Fallback to scan but fetch more items and sort properly
-            const scanParams = {
+            console.log("Using optimized TimestampIndex GSI for wholesale transactions...");
+            
+            // Use the new TimestampIndex GSI for efficient querying
+            const params = {
                 TableName: "Transaction_Wholesale",
-                Limit: Math.max(limit * 3, 100), // Fetch more items to ensure we get recent ones
+                IndexName: "TimestampIndex",
+                KeyConditionExpression: "#gsiPk = :gsiPk",
+                ExpressionAttributeNames: {
+                    "#gsiPk": "GSI_PK"
+                },
+                ExpressionAttributeValues: {
+                    ":gsiPk": { S: "ALL" }
+                },
+                ScanIndexForward: false, // Sort descending by Timestamp
+                Limit: limit
             };
+
             if (startKey) {
-                scanParams.ExclusiveStartKey = startKey;
+                params.ExclusiveStartKey = startKey;
             }
-            command = new ScanCommand(scanParams);
-            response = await client.send(command);
+
+            const command = new QueryCommand(params);
+            const response = await client.send(command);
+            
+            if (response.Items && response.Items.length > 0) {
+                const items = response.Items.map(item => unmarshall(item));
+                console.log(`TimestampIndex GSI successful, items found: ${items.length}`);
+                
+                return {
+                    items: items,
+                    lastEvaluatedKey: response.LastEvaluatedKey || null
+                };
+            } else {
+                console.log("No items found with TimestampIndex GSI, falling back to DateIndex");
+                throw new Error("No items found with TimestampIndex GSI");
+            }
+            
+        } catch (gsiError) {
+            console.log("TimestampIndex GSI failed, falling back to DateIndex strategy:", gsiError);
+            
+            // Fallback to the existing DateIndex strategy
+            return await fetchWholesaleTransactionsDateIndex(client, limit, startKey);
         }
-        
-        console.log("response", response);
-        const items = response.Items.map(item => unmarshall(item));
-        console.log("items", items);
-        
-        // Enhanced sorting with proper date/time handling
-        items.sort((a, b) => {
-            // Create full datetime for comparison
-            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
-            
-            // If dates are invalid, fall back to string comparison
-            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-                return (b.Date || '').localeCompare(a.Date || '');
-            }
-            
-            return dateTimeB - dateTimeA; // Descending order (newest first)
-        });
-        
-        // If we fetched more than requested, trim to the requested limit
-        const trimmedItems = items.slice(0, limit);
-        
-        return {
-            items: trimmedItems,
-            lastEvaluatedKey: response.LastEvaluatedKey || null,
-        };
     } catch (error) {
         console.error("Error fetching wholesale transactions:", error);
         throw error;
     }
 };
 
-// Enhanced fetch function that gets all recent transactions for proper sorting
-export const fetchAllRecentTransactions = async (idToken, limit = 50) => {
-    try {
-        const [retailData, wholesaleData] = await Promise.all([
-            fetchRetailTransactions(idToken, limit),
-            fetchWholesaleTransactions(idToken, limit),
-        ]);
+// Fallback function for retail transactions using DateIndex (existing logic)
+// const fetchRetailTransactionsDateIndex = async (client, limit, startKey) => {
+//     let allItems = [];
 
-        // Combine and sort all transactions
-        const allTransactions = [
-            ...retailData.items.map(tx => ({ ...tx, type: 'retail' })),
-            ...wholesaleData.items.map(tx => ({ ...tx, type: 'wholesale' }))
-        ];
+//     // Strategy: Query multiple recent dates to get comprehensive results
+//     const dates = [];
+//     for (let i = 0; i < 60; i++) {
+//         const date = new Date();
+//         date.setDate(date.getDate() - i);
+//         dates.push(date.toISOString().split('T')[0]);
+//     }
 
-        // Sort combined transactions by date/time
-        allTransactions.sort((a, b) => {
-            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+//     // Query each date until we have enough items
+//     for (const dateValue of dates) {
+//         if (allItems.length >= limit * 2) break;
+        
+//         try {
+//             const params = {
+//                 TableName: "Transaction_Retail",
+//                 IndexName: "DateIndex",
+//                 KeyConditionExpression: "#dateAttr = :dateValue",
+//                 ExpressionAttributeNames: {
+//                     "#dateAttr": "Date"
+//                 },
+//                 ExpressionAttributeValues: {
+//                     ":dateValue": { S: dateValue }
+//                 },
+//                 ScanIndexForward: false,
+//                 Limit: 50
+//             };
+
+//             const command = new QueryCommand(params);
+//             const response = await client.send(command);
             
-            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-                return (b.Date || '').localeCompare(a.Date || '');
-            }
-            
-            return dateTimeB - dateTimeA;
-        });
+//             if (response.Items && response.Items.length > 0) {
+//                 const items = response.Items.map(item => unmarshall(item));
+//                 allItems.push(...items);
+//             }
+//         } catch (dateError) {
+//             console.log(`Error querying date ${dateValue}:`, dateError.message);
+//             continue;
+//         }
+//     }
 
-        return {
-            items: allTransactions.slice(0, limit),
-            hasMore: allTransactions.length >= limit
-        };
-    } catch (error) {
-        console.error("Error fetching all recent transactions:", error);
-        throw error;
-    }
-};
+//     if (allItems.length > 0) {
+//         // Sort by Timestamp first, then fallback to Date+Time
+//         allItems.sort((a, b) => {
+//             if (a.Timestamp && b.Timestamp) {
+//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+//             }
+            
+//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            
+//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+//                 return (b.Date || '').localeCompare(a.Date || '');
+//             }
+            
+//             return dateTimeB - dateTimeA;
+//         });
+
+//         return {
+//             items: allItems.slice(0, limit),
+//             lastEvaluatedKey: null
+//         };
+//     } else {
+//         // Final fallback to scan
+//         const scanParams = {
+//             TableName: "Transaction_Retail",
+//             Limit: Math.max(limit * 10, 500)
+//         };
+        
+//         if (startKey) {
+//             scanParams.ExclusiveStartKey = startKey;
+//         }
+        
+//         const command = new ScanCommand(scanParams);
+//         const response = await client.send(command);
+        
+//         const items = response.Items.map(item => unmarshall(item));
+        
+//         // Sort with Timestamp priority
+//         items.sort((a, b) => {
+//             if (a.Timestamp && b.Timestamp) {
+//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+//             }
+            
+//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            
+//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+//                 return (b.Date || '').localeCompare(a.Date || '');
+//             }
+            
+//             return dateTimeB - dateTimeA;
+//         });
+        
+//         return {
+//             items: items.slice(0, limit),
+//             lastEvaluatedKey: response.LastEvaluatedKey || null
+//         };
+//     }
+// };
+
+// Fallback function for wholesale transactions using DateIndex (existing logic)
+// const fetchWholesaleTransactionsDateIndex = async (client, limit, startKey) => {
+//     let allItems = [];
+
+//     // Strategy: Query multiple recent dates to get comprehensive results
+//     const dates = [];
+//     for (let i = 0; i < 60; i++) {
+//         const date = new Date();
+//         date.setDate(date.getDate() - i);
+//         dates.push(date.toISOString().split('T')[0]);
+//     }
+
+//     // Query each date until we have enough items
+//     for (const dateValue of dates) {
+//         if (allItems.length >= limit * 2) break;
+        
+//         try {
+//             const params = {
+//                 TableName: "Transaction_Wholesale",
+//                 IndexName: "DateIndex",
+//                 KeyConditionExpression: "#dateAttr = :dateValue",
+//                 ExpressionAttributeNames: {
+//                     "#dateAttr": "Date"
+//                 },
+//                 ExpressionAttributeValues: {
+//                     ":dateValue": { S: dateValue }
+//                 },
+//                 ScanIndexForward: false,
+//                 Limit: 50
+//             };
+
+//             const command = new QueryCommand(params);
+//             const response = await client.send(command);
+            
+//             if (response.Items && response.Items.length > 0) {
+//                 const items = response.Items.map(item => unmarshall(item));
+//                 allItems.push(...items);
+//             }
+//         } catch (dateError) {
+//             console.log(`Error querying date ${dateValue}:`, dateError.message);
+//             continue;
+//         }
+//     }
+
+//     if (allItems.length > 0) {
+//         // Sort by Timestamp first, then fallback to Date+Time
+//         allItems.sort((a, b) => {
+//             if (a.Timestamp && b.Timestamp) {
+//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+//             }
+            
+//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            
+//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+//                 return (b.Date || '').localeCompare(a.Date || '');
+//             }
+            
+//             return dateTimeB - dateTimeA;
+//         });
+
+//         return {
+//             items: allItems.slice(0, limit),
+//             lastEvaluatedKey: null
+//         };
+//     } else {
+//         // Final fallback to scan
+//         const scanParams = {
+//             TableName: "Transaction_Wholesale",
+//             Limit: Math.max(limit * 10, 500)
+//         };
+        
+//         if (startKey) {
+//             scanParams.ExclusiveStartKey = startKey;
+//         }
+        
+//         const command = new ScanCommand(scanParams);
+//         const response = await client.send(command);
+        
+//         const items = response.Items.map(item => unmarshall(item));
+        
+//         // Sort with Timestamp priority
+//         items.sort((a, b) => {
+//             if (a.Timestamp && b.Timestamp) {
+//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+//             }
+            
+//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            
+//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+//                 return (b.Date || '').localeCompare(a.Date || '');
+//             }
+            
+//             return dateTimeB - dateTimeA;
+//         });
+        
+//         return {
+//             items: items.slice(0, limit),
+//             lastEvaluatedKey: response.LastEvaluatedKey || null
+//         };
+//     }
+// };
+
+// Ultra-optimized fetch function for all recent transactions
+// export const fetchAllRecentTransactions = async (idToken, limit = 50) => {
+//     try {
+//         const [retailData, wholesaleData] = await Promise.all([
+//             fetchRetailTransactions(idToken, limit),
+//             fetchWholesaleTransactions(idToken, limit),
+//         ]);
+
+//         // Combine and sort all transactions using Timestamp for ultimate precision
+//         const allTransactions = [
+//             ...retailData.items.map(tx => ({ ...tx, type: 'retail' })),
+//             ...wholesaleData.items.map(tx => ({ ...tx, type: 'wholesale' }))
+//         ];
+//         console.log("allTransactions", allTransactions);
+
+//         // Sort combined transactions with Timestamp priority (most accurate)
+//         allTransactions.sort((a, b) => {
+//             // Primary sort: Timestamp (most accurate)
+//             if (a.Timestamp && b.Timestamp) {
+//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+//             }
+            
+//             // Fallback sort: Date+Time parsing
+//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            
+//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+//                 return (b.Date || '').localeCompare(a.Date || '');
+//             }
+            
+//             return dateTimeB - dateTimeA;
+//         });
+
+//         return {
+//             items: allTransactions.slice(0, limit),
+//             hasMore: allTransactions.length >= limit
+//         };
+//     } catch (error) {
+//         console.error("Error fetching all recent transactions:", error);
+//         throw error;
+//     }
+// };
 
 // Fetch customer details (unchanged)
 export const fetchCustomerDetails = async (idToken, customerIds) => {

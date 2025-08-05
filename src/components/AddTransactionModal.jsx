@@ -366,7 +366,7 @@ const handleSubmit = async (e) => {
             ? RETAIL_TABLE_NAME
             : WHOLESALE_TABLE_NAME;
 
-        // Common fields
+        // Common fields with NEW GSI attributes
         const transactionData = {
             TransactionID: { S: transactionId },
             CustomerID: { S: customerId },
@@ -375,8 +375,9 @@ const handleSubmit = async (e) => {
             ProductName: { S: productCategory },
             ProductVariation: { S: productVariation },
             NetProfit: { N: netProfit.toString() },
-            // Add timestamp for easier sorting (optional but recommended)
-            Timestamp: { N: now.getTime().toString() }
+            // NEW: Add GSI attributes for future optimization
+            GSI_PK: { S: "ALL" }, // Constant partition key for TimestampIndex
+            Timestamp: { N: now.getTime().toString() } // Timestamp for sorting
         };
 
         // Add type-specific fields
