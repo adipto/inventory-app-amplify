@@ -131,11 +131,16 @@ function CustomerList() {
         // eslint-disable-next-line
     }, [isAuthenticated, userToken, currentPage, itemsPerPage]);
 
-    // Reset to first page when filters/search change
+    // Reset to first page when filters/search change and refetch data
     useEffect(() => {
-        setCurrentPage(1);
-        setLastEvaluatedKeys([null]); // Reset lastEvaluatedKeys when filters change
-    }, [searchQuery, activeFilter]);
+        if (isAuthenticated && userToken) {
+            setCurrentPage(1);
+            setLastEvaluatedKeys([null]); // Reset lastEvaluatedKeys when filters change
+            // Fetch the first page with new filters
+            fetchCustomersPage(1, itemsPerPage);
+        }
+        // eslint-disable-next-line
+    }, [searchQuery, activeFilter, isAuthenticated, userToken, itemsPerPage]);
 
     // Now, after all hooks, you can have your early returns:
     if (isLoading) {
@@ -162,15 +167,15 @@ function CustomerList() {
         return matchesType && matchesSearch;
     });
 
-    // Pagination logic
-    const totalItems = filteredCustomers.length;
+    // Pagination logic - Calculate total pages based on whether we have more data
     const totalPages = lastEvaluatedKeys.filter((k) => k !== null).length + 1;
     const paginatedCustomers = filteredCustomers; // Already paginated from server
+    const hasNextPage = lastEvaluatedKeys[currentPage] !== null && lastEvaluatedKeys[currentPage] !== undefined;
 
     const handlePageChange = (page) => {
         if (page < 1) return;
         // Only fetch next page if we have a start key or it's the first page
-        if (page === 1 || lastEvaluatedKeys[page - 1]) {
+        if (page === 1 || lastEvaluatedKeys[page - 1] !== undefined) {
             setCurrentPage(page);
         }
     };
@@ -317,30 +322,40 @@ function CustomerList() {
                                         ))}
                                     </tbody>
                                 </table>
-                                {/* Pagination Controls (Desktop) */}
-                                {totalPages > 1 && (
+                                {/* Pagination Controls (Desktop) - Show if we have more than one page OR potential next page */}
+                                {(totalPages > 1 || hasNextPage || customers.length >= itemsPerPage) && (
                                     <div className="flex justify-between items-center p-4 border-t bg-gray-50">
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => handlePageChange(currentPage - 1)}
                                                 disabled={currentPage === 1}
-                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Prev
                                             </button>
-                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                            
+                                            {/* Show current page and nearby pages */}
+                                            {Array.from({ length: Math.max(totalPages, currentPage) }, (_, i) => i + 1)
+                                                .filter(page => Math.abs(page - currentPage) <= 2)
+                                                .map((page) => (
                                                 <button
                                                     key={page}
                                                     onClick={() => handlePageChange(page)}
-                                                    className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                                                    disabled={page > currentPage && !lastEvaluatedKeys[page - 1]}
+                                                    className={`px-3 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                        page === currentPage 
+                                                            ? 'bg-blue-600 text-white' 
+                                                            : 'bg-white text-gray-700 hover:bg-gray-100'
+                                                    }`}
                                                 >
                                                     {page}
                                                 </button>
                                             ))}
+                                            
                                             <button
                                                 onClick={() => handlePageChange(currentPage + 1)}
-                                                disabled={currentPage === totalPages}
-                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                                disabled={!hasNextPage && customers.length < itemsPerPage}
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Next
                                             </button>
@@ -428,30 +443,41 @@ function CustomerList() {
                                         No customers found matching your criteria.
                                     </div>
                                 )}
-                                {/* Pagination Controls (Mobile) */}
-                                {totalPages > 1 && (
+                                
+                                {/* Pagination Controls (Mobile) - Show if we have more than one page OR potential next page */}
+                                {(totalPages > 1 || hasNextPage || customers.length >= itemsPerPage) && (
                                     <div className="flex justify-between items-center p-4 border-t bg-gray-50 md:hidden">
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => handlePageChange(currentPage - 1)}
                                                 disabled={currentPage === 1}
-                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Prev
                                             </button>
-                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                            
+                                            {/* Show current page and nearby pages */}
+                                            {Array.from({ length: Math.max(totalPages, currentPage) }, (_, i) => i + 1)
+                                                .filter(page => Math.abs(page - currentPage) <= 1) // Show fewer pages on mobile
+                                                .map((page) => (
                                                 <button
                                                     key={page}
                                                     onClick={() => handlePageChange(page)}
-                                                    className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                                                    disabled={page > currentPage && !lastEvaluatedKeys[page - 1]}
+                                                    className={`px-3 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                        page === currentPage 
+                                                            ? 'bg-blue-600 text-white' 
+                                                            : 'bg-white text-gray-700'
+                                                    }`}
                                                 >
                                                     {page}
                                                 </button>
                                             ))}
+                                            
                                             <button
                                                 onClick={() => handlePageChange(currentPage + 1)}
-                                                disabled={currentPage === totalPages}
-                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50"
+                                                disabled={!hasNextPage && customers.length < itemsPerPage}
+                                                className="px-3 py-1 rounded border bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 Next
                                             </button>
@@ -490,7 +516,7 @@ function CustomerList() {
                         isOpen={isModalOpen}
                         onClose={closeModal}
                         editingCustomer={editingCustomer}
-                        refreshCustomers={fetchCustomersPage}
+                        refreshCustomers={() => fetchCustomersPage(currentPage, itemsPerPage)}
                         userToken={userToken}
                     />
                 </main>
