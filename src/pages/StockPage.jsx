@@ -104,10 +104,12 @@ function StockPage() {
       const session = await fetchAuthSession();
       const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
       if (!idToken) return;
-      const entries = await fetchStockEntries(idToken);
-      setStockEntries(entries);
+      
+      const result = await fetchStockEntries(idToken, 1, 10); // Get first page with 10 items
+      setStockEntries(result.entries); // Use result.entries instead of just result
     } catch (err) {
       console.error("Error fetching stock entries:", err);
+      setError("Failed to load stock entries. Please try again later.");
     } finally {
       setEntriesLoading(false);
     }
@@ -322,12 +324,18 @@ function StockPage() {
   };
 
   // Update handleAddModalClose to also fetch entries and update capital management
-  const handleAddModalClose = async () => {
-    setIsAddModalOpen(false);
-    setItemToEdit(null);
-    await fetchEntries();
-    
-    // Update capital management after stock addition
+const handleAddModalClose = async (wasItemAdded = false) => {
+  setIsAddModalOpen(false);
+  setItemToEdit(null);
+  
+  // Always refresh main stock data
+  await fetchData();
+  
+  // Always refresh stock entries to show the latest additions
+  await fetchEntries();
+  
+  // Update capital management after stock addition
+  if (wasItemAdded) {
     try {
       const session = await fetchAuthSession();
       const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
@@ -338,13 +346,29 @@ function StockPage() {
     } catch (error) {
       console.error("Error updating capital management:", error);
     }
-  };
+  }
+};
 
   // Combined refresh for both main stock and entries
-  const handleAllStockRefresh = async () => {
-    await fetchData();
-    await fetchEntries();
-  };
+const handleAllStockRefresh = async () => {
+  setIsLoading(true);
+  setEntriesLoading(true);
+  
+  try {
+    // Refresh both main stock and entries in parallel
+    await Promise.all([
+      fetchData(),
+      fetchEntries()
+    ]);
+    setError(null);
+  } catch (err) {
+    console.error("Error refreshing data:", err);
+    setError("Failed to refresh data. Please try again.");
+  } finally {
+    setIsLoading(false);
+    setEntriesLoading(false);
+  }
+};
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -799,23 +823,31 @@ function StockPage() {
           {/* All Stock Entries Table */}
           <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">All Stock Entries</h2>
           <AllStockEntriesTable
-            entries={stockEntries}
-            onRefresh={handleAllStockRefresh}
-            loading={entriesLoading}
-          />
+  entries={stockEntries}
+  onRefresh={handleAllStockRefresh}
+  loading={entriesLoading}
+  onEntryDeleted={async () => {
+    // Refresh both stock and entries when an entry is deleted
+    await fetchData();
+    await fetchEntries();
+  }}
+/>
         </main>
       </div>
 
       {/* Modals */}
       <AddStockModal
-        isOpen={isAddModalOpen}
-        onClose={handleAddModalClose}
-        onStockAdded={() => {
-          fetchData();
-          fetchEntries();
-        }}
-        editItem={itemToEdit}
-      />
+  isOpen={isAddModalOpen}
+  onClose={() => handleAddModalClose(false)} // Pass false when just closing
+  onStockAdded={async () => {
+    // This gets called when stock is actually added
+    await fetchData();
+    await fetchEntries();
+    // Indicate that an item was added for capital management update
+    await handleAddModalClose(true);
+  }}
+  editItem={itemToEdit}
+/>
 
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}

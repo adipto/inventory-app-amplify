@@ -15,6 +15,7 @@ export const fetchCustomers = async (idToken, limit = 10, startKey = null) => {
 
     const command = new ScanCommand(params);
     const response = await client.send(command);
+    console.log("response", response);
 
     return {
         items: response.Items.map((item) => ({

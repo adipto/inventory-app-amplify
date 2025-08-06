@@ -22,6 +22,11 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         const today = new Date();
         return today.toISOString().split('T')[0];
     });
+    const [time, setTime] = useState(() => {
+        // Default to current time in HH:MM format
+        const now = new Date();
+        return now.toTimeString().slice(0, 5);
+    });
 
     const isCustomVariation = variation === "__custom__";
 
@@ -76,6 +81,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             setQuantity(editItem.quantity?.toString() || "");
             setLowStockThreshold(editItem.lowStockThreshold?.toString() || "10");
             setDate(editItem.date || new Date().toISOString().split('T')[0]);
+            setTime(editItem.time || new Date().toTimeString().slice(0, 5));
 
             // Handle custom variation if needed
             if (
@@ -101,7 +107,9 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         setLowStockThreshold("10");
         setIsEdit(false);
         setOriginalItem(null);
-        setDate(new Date().toISOString().split('T')[0]);
+        const today = new Date();
+        setDate(today.toISOString().split('T')[0]);
+        setTime(today.toTimeString().slice(0, 5));
     };
 
     const handleSubmit = async (e) => {
@@ -133,8 +141,10 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
 
             // --- Insert into Stock_Entries if this is a new item (not edit) ---
             if (!isEdit) {
-                // Prepare item for Stock_Entries
-                const timestamp = new Date().toISOString();
+                // Create a proper datetime from date and time inputs
+                const dateTimeString = `${date}T${time}:00.000Z`;
+                const timestamp = new Date(dateTimeString).getTime(); // Unix timestamp in milliseconds
+                
                 const stockTypeKey = `${stockType}#${finalVariation}#${timestamp}`;
                 const stockEntryItem = {
                     Date: { S: date },
@@ -143,12 +153,16 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                     VariationName: { S: finalVariation },
                     StockType: { S: stockType },
                     UnitPrice: { N: unitPrice.toString() },
+                    Timestamp: { N: timestamp.toString() }, // Single timestamp field
+                    GSI_PK: { S: "STOCK_ENTRIES" } // Partition key for GSI
                 };
+                
                 if (stockType === "Wholesale") {
                     stockEntryItem.Quantity_Packets = { N: Number(quantity).toString() };
                 } else {
                     stockEntryItem.Quantity_Pcs = { N: Number(quantity).toString() };
                 }
+                
                 // Insert into Stock_Entries table
                 const stockEntriesCommand = new PutItemCommand({
                     TableName: "Stock_Entries",
@@ -254,10 +268,11 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             }
             // --- End Capital Management Update ---
 
+            // Call onStockAdded callback to refresh data
             if (onStockAdded) {
-                onStockAdded();
+                await onStockAdded();
             }
-
+            
             onClose();
         } catch (err) {
             console.error("Error managing stock:", err);
@@ -389,7 +404,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                             leaveFrom="opacity-100 scale-100"
                             leaveTo="opacity-0 scale-95"
                         >
-                            <DialogPanel className="bg-white p-6 rounded-xl shadow-xl w-full max-w-md">
+                            <DialogPanel className="bg-white p-6 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
                                 <div className="flex items-center justify-between mb-4">
                                     <DialogTitle className="text-xl font-semibold text-gray-800">
                                         {isEdit ? "Edit Stock Item" : "Add Stock Item"}
@@ -404,18 +419,32 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                 </div>
 
                                 <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-                                    {/* Date Picker */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                        <input
-                                            type="date"
-                                            value={date}
-                                            onChange={(e) => setDate(e.target.value)}
-                                            className="w-full border p-2 rounded"
-                                            required
-                                            disabled={isLoading}
-                                        />
+                                    {/* Date and Time Row */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                            <input
+                                                type="date"
+                                                value={date}
+                                                onChange={(e) => setDate(e.target.value)}
+                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                required
+                                                disabled={isLoading}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                                            <input
+                                                type="time"
+                                                value={time}
+                                                onChange={(e) => setTime(e.target.value)}
+                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                required
+                                                disabled={isLoading}
+                                            />
+                                        </div>
                                     </div>
+
                                     {/* Item Type */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Item Type</label>
@@ -425,7 +454,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                                 setItemType(e.target.value);
                                                 setVariation("");
                                             }}
-                                            className="w-full border p-2 rounded"
+                                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             disabled={isLoading}
                                         >
                                             {Object.keys(predefinedVariations).map((type) => (
@@ -442,7 +471,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                         <select
                                             value={variation}
                                             onChange={(e) => setVariation(e.target.value)}
-                                            className="w-full border p-2 rounded"
+                                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             disabled={isLoading}
                                         >
                                             <option value="">Select a variation</option>
@@ -464,7 +493,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                                 placeholder="Enter custom variation"
                                                 value={customVariation}
                                                 onChange={(e) => setCustomVariation(e.target.value)}
-                                                className="w-full border p-2 rounded"
+                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                 required
                                                 disabled={isLoading}
                                             />
@@ -480,7 +509,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                         <select
                                             value={stockType}
                                             onChange={(e) => setStockType(e.target.value)}
-                                            className="w-full border p-2 rounded"
+                                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             disabled={isLoading}
                                         >
                                             <option value="Retail">Retail</option>
@@ -500,7 +529,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                             placeholder={isEdit ? "Enter new quantity" : "Enter quantity to add"}
                                             required
                                             min="1"
-                                            className="w-full border p-2 rounded"
+                                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             disabled={isLoading}
                                         />
                                         <p className="text-xs text-gray-500 mt-1">
@@ -522,7 +551,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                             placeholder="Enter low stock threshold"
                                             required
                                             min="1"
-                                            className="w-full border p-2 rounded"
+                                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             disabled={isLoading}
                                         />
                                         <p className="text-xs text-gray-500 mt-1">

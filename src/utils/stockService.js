@@ -1,5 +1,5 @@
 // src/utils/stockService.js
-import { ScanCommand, DeleteItemCommand, GetItemCommand, UpdateItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { ScanCommand, DeleteItemCommand, GetItemCommand, UpdateItemCommand, PutItemCommand, QueryCommand } from "@aws-sdk/client-dynamodb";
 import { createDynamoDBClient } from "../aws/aws-config";
 
 export const fetchStock = async (tableName, token) => {
@@ -274,26 +274,94 @@ export const updateMainStock = async ({
     }));
 };
 
-export const fetchStockEntries = async (token) => {
+/**
+ * Fetch stock entries using GSI with pagination
+ * @param {string} token - Auth token
+ * @param {number} page - Page number (1-based)
+ * @param {number} limit - Items per page (default: 10)
+ * @param {string} lastEvaluatedKey - For pagination continuation
+ * @returns {Object} { entries, hasMore, lastEvaluatedKey, totalScanned }
+ */
+export const fetchStockEntries = async (token, page = 1, limit = 10, lastEvaluatedKey = null) => {
     const client = await createDynamoDBClient(token);
-    const command = new ScanCommand({ TableName: "Stock_Entries" });
-    const response = await client.send(command);
-    const entries = (response.Items || []).map((item) => {
+    
+    try {
+        const command = new QueryCommand({
+            TableName: "Stock_Entries",
+            IndexName: "TimestampIndex",
+            KeyConditionExpression: "GSI_PK = :gsi_pk",
+            ExpressionAttributeValues: {
+                ":gsi_pk": { S: "STOCK_ENTRIES" }
+            },
+            ScanIndexForward: false, // Sort by timestamp descending (newest first)
+            Limit: limit,
+            ExclusiveStartKey: lastEvaluatedKey
+        });
+
+        const response = await client.send(command);
+        
+        const entries = (response.Items || []).map((item) => {
+            return {
+                id: `${item.Date?.S}-${item.ItemType?.S}-${item.VariationName?.S}-${Math.random().toString(36).slice(2, 8)}`,
+                date: item.Date?.S || "",
+                itemType: item.ItemType?.S || "",
+                variationName: item.VariationName?.S || "",
+                quantityPcs: item.Quantity_Pcs ? Number(item.Quantity_Pcs.N) : "",
+                quantityPackets: item.Quantity_Packets ? Number(item.Quantity_Packets.N) : "",
+                unitPrice: Number(item.UnitPrice?.N || 0),
+                totalValue: item.Quantity_Packets
+                    ? Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Packets?.N || 0) * 500
+                    : Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Pcs?.N || 0),
+                isWholesale: !!item.Quantity_Packets,
+                StockType_VariationName_Timestamp: item.StockType_VariationName_Timestamp?.S,
+                timestamp: item.Timestamp?.N ? Number(item.Timestamp.N) : null,
+                timestampDisplay: item.Timestamp?.N ? new Date(Number(item.Timestamp.N)).toLocaleString() : 'N/A'
+            };
+        });
+
         return {
-            id: `${item.Date?.S}-${item.ItemType?.S}-${item.VariationName?.S}-${Math.random().toString(36).slice(2, 8)}`,
-            date: item.Date?.S || "",
-            itemType: item.ItemType?.S || "",
-            variationName: item.VariationName?.S || "",
-            quantityPcs: item.Quantity_Pcs ? Number(item.Quantity_Pcs.N) : "",
-            quantityPackets: item.Quantity_Packets ? Number(item.Quantity_Packets.N) : "",
-            unitPrice: Number(item.UnitPrice?.N || 0),
-            totalValue: item.Quantity_Packets
-                ? Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Packets?.N || 0) * 500
-                : Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Pcs?.N || 0),
-            isWholesale: !!item.Quantity_Packets,
-            StockType_VariationName_Timestamp: item.StockType_VariationName_Timestamp?.S,
+            entries,
+            hasMore: !!response.LastEvaluatedKey,
+            lastEvaluatedKey: response.LastEvaluatedKey,
+            totalScanned: response.ScannedCount || 0
         };
-    });
-    // Sort by date descending
-    return entries.sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+        console.error("Error fetching stock entries with GSI:", error);
+        
+        // Fallback to scan if GSI query fails
+        // console.log("Falling back to scan method...");
+        // const command = new ScanCommand({ TableName: "Stock_Entries" });
+        // const response = await client.send(command);
+        // const entries = (response.Items || []).map((item) => {
+        //     return {
+        //         id: `${item.Date?.S}-${item.ItemType?.S}-${item.VariationName?.S}-${Math.random().toString(36).slice(2, 8)}`,
+        //         date: item.Date?.S || "",
+        //         itemType: item.ItemType?.S || "",
+        //         variationName: item.VariationName?.S || "",
+        //         quantityPcs: item.Quantity_Pcs ? Number(item.Quantity_Pcs.N) : "",
+        //         quantityPackets: item.Quantity_Packets ? Number(item.Quantity_Packets.N) : "",
+        //         unitPrice: Number(item.UnitPrice?.N || 0),
+        //         totalValue: item.Quantity_Packets
+        //             ? Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Packets?.N || 0) * 500
+        //             : Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Pcs?.N || 0),
+        //         isWholesale: !!item.Quantity_Packets,
+        //         StockType_VariationName_Timestamp: item.StockType_VariationName_Timestamp?.S,
+        //         timestamp: item.Timestamp?.N ? Number(item.Timestamp.N) : null,
+        //         timestampDisplay: item.Timestamp?.N ? new Date(Number(item.Timestamp.N)).toLocaleString() : 'N/A'
+        //     };
+        // });
+        
+        // Sort by timestamp descending and apply pagination manually
+        const sortedEntries = entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const paginatedEntries = sortedEntries.slice(startIndex, endIndex);
+        
+        return {
+            entries: paginatedEntries,
+            hasMore: endIndex < sortedEntries.length,
+            lastEvaluatedKey: null,
+            totalScanned: sortedEntries.length
+        };
+    }
 };

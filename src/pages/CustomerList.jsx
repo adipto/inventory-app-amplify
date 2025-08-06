@@ -66,6 +66,7 @@ function CustomerList() {
         try {
             const startKey = lastEvaluatedKeys[page - 1] || null;
             const { items, lastEvaluatedKey } = await fetchCustomersAPI(userToken, limit, startKey);
+            console.log("items", items);
             setCustomers(items);
             // Store the key for the next page
             const newKeys = [...lastEvaluatedKeys];
