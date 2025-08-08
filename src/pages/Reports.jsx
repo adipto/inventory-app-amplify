@@ -148,6 +148,7 @@ const SummaryStats = ({ data, isAllTime = false }) => {
         { label: "Units Sold", value: totalQuantity.toLocaleString(), icon: Package, color: "purple" },
         { label: "Profit Margin", value: `${profitMargin}%`, icon: Target, color: "orange" }
     ];
+    console.log(totalQuantity.toLocaleString());
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -369,7 +370,7 @@ function EnhancedReportsPage() {
                                         {dataLoading ? 'Loading...' : 'Generate All Time Reports'}
                                     </button>
                                 )}
-                                {!isAllTime && (
+                                {/* {!isAllTime && (
                                 <div className="flex gap-2">
                                     <button
                                     onClick={async () => {
@@ -391,7 +392,7 @@ console.log(`Wholesale YEAR ${selectedYearOnly} ->`, wholesaleY.length, wholesal
                                     Run Yearly Console Test
                                     </button>
                                 </div>
-                                )}
+                                )} */}
 
                             </div>
 

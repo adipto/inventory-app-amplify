@@ -22,8 +22,12 @@ export const fetchTransactionReports = async (idToken, month, year) => {
         ]);
 
         console.log(`Retrieved ${retail.length} retail and ${wholesale.length} wholesale transactions`);
+        const processTransactionTest = processTransactionData(retail, wholesale, null, year, "yearly");
+        console.log("processTransactionTestMonthly", processTransactionTest)
 
-        return processTransactionData(retail, wholesale, month, year, "monthly");
+        return processTransactionTest;
+
+        // return processTransactionData(retail, wholesale, month, year, "monthly");
         
     } catch (error) {
         console.error(`Error in fetchTransactionReports for ${month}/${year}:`, error);
@@ -41,10 +45,14 @@ export const fetchYearlyTransactions = async (idToken, year) => {
             fetchRetailTransactionsForYear(idToken, year),
             fetchWholesaleTransactionsForYear(idToken, year)
         ]);
+        // console.log("retail", retail)
+        // console.log("wholesale", wholesale)
 
         console.log(`Retrieved ${retail.length} retail and ${wholesale.length} wholesale transactions for year ${year}`);
+        const processTransactionTest = processTransactionData(retail, wholesale, null, year, "yearly");
+        console.log("processTransactionTestYearly", processTransactionTest)
 
-        return processTransactionData(retail, wholesale, null, year, "yearly");
+        return processTransactionTest;
         
     } catch (error) {
         console.error(`Error in fetchYearlyTransactions for ${year}:`, error);
@@ -99,125 +107,143 @@ const processTransactionData = (retail, wholesale, month, year, mode) => {
     let allTransactions = [];
 
     const processTransactions = (transactions, type) => {
-        transactions.forEach(txn => {
-            try {
-                // Validate transaction data
-                if (!txn.Date) {
-                    console.warn(`Transaction missing date:`, txn);
-                    return;
-                }
-
-                const txnDate = dayjs(txn.Date);
-                
-                // Additional filtering based on mode (though GSI queries should handle most filtering)
-                if (mode === "monthly" && month && year) {
-                    if (txnDate.month() + 1 !== month || txnDate.year() !== year) return;
-                } else if (mode === "yearly" && year) {
-                    if (txnDate.year() !== year) return;
-                }
-                // mode === "alltime": no additional filter
-
-                const date = formatDate(txn.Date);
-                const monthYear = formatMonth(txn.Date);
-                const dayOfWeek = formatDayOfWeek(txn.Date);
-                const week = formatWeek(txn.Date);
-
-                // Handle different quantity fields for retail vs wholesale
-                const quantity = type === 'retail' 
-                    ? (txn.Quantity_Pcs || 0)
-                    : (txn.Quantity_Packets || 0);
-
-                // Handle different price fields for retail vs wholesale  
-                const unitPrice = type === 'retail' 
-                    ? (txn.SellingPrice_Per_Pc || 0)
-                    : (txn.SellingPrice_Per_Packet || 0);
-
-                const revenue = unitPrice * quantity;
-                const profit = txn.NetProfit || 0;
-                
-                // Create product key with variation if available
-                const productVariation = txn.ProductVariation || '';
-                const productKey = productVariation 
-                    ? `${txn.ProductName} (${productVariation})`
-                    : txn.ProductName;
-                
-                const productType = txn.ProductName || 'Unknown';
-                const customerID = txn.CustomerID || 'Unknown';
-
-                // Add to all transactions array for sorting later
-                allTransactions.push({
-                    ...txn,
-                    date,
-                    revenue,
-                    profit,
-                    quantity,
-                    type
-                });
-
-                // Daily Sales aggregation
-                if (!dailySalesMap[date]) {
-                    dailySalesMap[date] = { date, retail: 0, wholesale: 0 };
-                }
-                dailySalesMap[date][type] += revenue;
-
-                // Monthly Summary aggregation
-                if (!monthlyMap[monthYear]) {
-                    monthlyMap[monthYear] = { month: monthYear, revenue: 0, quantity: 0, profit: 0 };
-                }
-                monthlyMap[monthYear].revenue += revenue;
-                monthlyMap[monthYear].quantity += quantity;
-                monthlyMap[monthYear].profit += profit;
-
-                // Top Products aggregation
-                if (!productMap[productKey]) {
-                    productMap[productKey] = { product: productKey, quantity: 0, revenue: 0 };
-                }
-                productMap[productKey].quantity += quantity;
-                productMap[productKey].revenue += revenue;
-
-                // Profit by Product Category
-                if (!profitByCategory[productType]) {
-                    profitByCategory[productType] = 0;
-                }
-                profitByCategory[productType] += profit;
-
-                // Profit by Retail/Wholesale
-                profitByType[type] += profit;
-
-                // Day of Week Volume (for weekly transaction patterns)
-                if (!dayOfWeekMap[dayOfWeek]) {
-                    dayOfWeekMap[dayOfWeek] = 0;
-                }
-                dayOfWeekMap[dayOfWeek] += 1;
-
-                // Weekly patterns
-                if (!weeklyMap[week]) {
-                    weeklyMap[week] = { week, count: 0, revenue: 0 };
-                }
-                weeklyMap[week].count += 1;
-                weeklyMap[week].revenue += revenue;
-
-                // Product Type Breakdown
-                if (!productTypeMap[productType]) {
-                    productTypeMap[productType] = { type: productType, retail: 0, wholesale: 0 };
-                }
-                productTypeMap[productType][type] += revenue;
-
-                // Customer Frequency
-                if (!customerFrequency[customerID]) {
-                    customerFrequency[customerID] = 0;
-                }
-                customerFrequency[customerID]++;
-
-            } catch (error) {
-                console.error(`Error processing transaction:`, error, txn);
+        const PACK_SIZE = 500;
+        const toNum = (v) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : 0;
+        };
+      
+        transactions.forEach((txn) => {
+          try {
+            if (!txn.Date) {
+              console.warn(`Transaction missing date:`, txn);
+              return;
             }
+      
+            const txnDate = dayjs(txn.Date);
+      
+            if (mode === "monthly" && month && year) {
+              if (txnDate.month() + 1 !== month || txnDate.year() !== year) return;
+            } else if (mode === "yearly" && year) {
+              if (txnDate.year() !== year) return;
+            }
+      
+            const date = formatDate(txn.Date);
+            const monthYear = formatMonth(txn.Date);
+            const dayOfWeek = formatDayOfWeek(txn.Date);
+            const week = formatWeek(txn.Date);
+      
+            // Raw quantities
+            const pieces = toNum(txn.Quantity_Pcs ?? txn.Quantity_pcs);
+            const packs  = toNum(txn.Quantity_Packets ?? txn.Quantity_packets);
+      
+            // Normalize quantity to PACKETS (decimal) for both types
+            const quantityPackets = type === "retail" ? pieces / PACK_SIZE : packs;
+      
+            // Also keep a pieces view in case you need it elsewhere
+            const quantityPieces  = type === "retail" ? pieces : packs * PACK_SIZE;
+      
+            // Prices in native units
+            const pricePerPc     = toNum(txn.SellingPrice_Per_Pc ?? txn.SellingPrice_per_pc);
+            const pricePerPacket = toNum(txn.SellingPrice_Per_Packet ?? txn.SellingPrice_per_packet);
+      
+            // Revenue in native units (don’t mix units)
+            const revenue = type === "retail"
+              ? pricePerPc * pieces
+              : pricePerPacket * packs;
+      
+            const profit = toNum(txn.NetProfit);
+      
+            const productVariation = txn.ProductVariation || "";
+            const productKey = productVariation
+              ? `${txn.ProductName} (${productVariation})`
+              : txn.ProductName;
+      
+            const productType = txn.ProductName || "Unknown";
+            const customerID = txn.CustomerID || "Unknown";
+      
+            // Store normalized + auxiliary quantities
+            allTransactions.push({
+              ...txn,
+              date,
+              revenue,
+              profit,
+              quantity: quantityPackets,      // <-- packets (decimal)
+              quantityPackets: quantityPackets,
+              quantityPieces: quantityPieces,
+              type,
+            });
+      
+            // Daily Sales (revenue by type)
+            if (!dailySalesMap[date]) {
+              dailySalesMap[date] = { date, retail: 0, wholesale: 0 };
+            }
+            dailySalesMap[date][type] += revenue;
+      
+            // Monthly Summary (use packets-decimal for quantity)
+            if (!monthlyMap[monthYear]) {
+              monthlyMap[monthYear] = { month: monthYear, revenue: 0, quantity: 0, profit: 0 };
+            }
+            monthlyMap[monthYear].revenue += revenue;
+            monthlyMap[monthYear].quantity += quantityPackets; // packets (decimal)
+            monthlyMap[monthYear].profit += profit;
+      
+            // Top Products (quantity in packets-decimal; revenue unchanged)
+            if (!productMap[productKey]) {
+              productMap[productKey] = { product: productKey, quantity: 0, revenue: 0 };
+            }
+            productMap[productKey].quantity += quantityPackets;
+            productMap[productKey].revenue += revenue;
+      
+            // Profit by Product Category
+            if (!profitByCategory[productType]) {
+              profitByCategory[productType] = 0;
+            }
+            profitByCategory[productType] += profit;
+      
+            // Profit by Retail/Wholesale
+            profitByType[type] += profit;
+      
+            // Day of Week Volume (transaction count)
+            if (!dayOfWeekMap[dayOfWeek]) {
+              dayOfWeekMap[dayOfWeek] = 0;
+            }
+            dayOfWeekMap[dayOfWeek] += 1;
+      
+            // Weekly patterns
+            if (!weeklyMap[week]) {
+              weeklyMap[week] = { week, count: 0, revenue: 0 };
+            }
+            weeklyMap[week].count += 1;
+            weeklyMap[week].revenue += revenue;
+      
+            // Product Type Breakdown (revenue by type)
+            if (!productTypeMap[productType]) {
+              productTypeMap[productType] = { type: productType, retail: 0, wholesale: 0 };
+            }
+            productTypeMap[productType][type] += revenue;
+      
+            // Customer Frequency
+            if (!customerFrequency[customerID]) {
+              customerFrequency[customerID] = 0;
+            }
+            customerFrequency[customerID]++;
+      
+          } catch (error) {
+            console.error(`Error processing transaction:`, error, txn);
+          }
         });
-    };
+      };
+      
+
+    console.log("retail", retail)
+    console.log("wholesale", wholesale)
 
     // Process both retail and wholesale transactions
     processTransactions(retail, "retail");
     processTransactions(wholesale, "wholesale");
+    
+    
 
     // Sort all transactions by date for cumulative profit calculation
     allTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));

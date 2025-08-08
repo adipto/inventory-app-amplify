@@ -335,9 +335,12 @@ export const fetchWholesaleTransactionsForYear = async (idToken, year) => {
         const startDate = new Date(year, 0, 1); // January 1st
         const endDate = new Date(year, 11, 31, 23, 59, 59, 999); // December 31st
         
-        const startTimestamp = Math.floor(startDate.getTime() / 1000);
-        const endTimestamp = Math.floor(endDate.getTime() / 1000);
+        // const startTimestamp = Math.floor(startDate.getTime() / 1000);
+        // const endTimestamp = Math.floor(endDate.getTime() / 1000);
         
+        const startTimestamp = Math.floor(Date.UTC(year,0,1)/1000) * 1000; // ms
+        const endTimestamp   = Math.floor(Date.UTC(year,11,31,23,59,59,999)/1000) * 1000; // ms
+
         console.log(`Fetching wholesale transactions for year ${year} (${startTimestamp} - ${endTimestamp})`);
         
         let allItems = [];
