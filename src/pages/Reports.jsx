@@ -485,20 +485,20 @@ function EnhancedReportsPage() {
                                                     return (
                                                         <>
                                                             <ResponsiveContainer width="100%" minWidth={400} height={350}>
-                                                                <BarChart
-                                                                    data={top10}
-                                                                    layout="vertical"
-                                                                    margin={{ left: 20, right: 20, top: 20, bottom: 20 }}
-                                                                    barCategoryGap={"20%"}
-                                                                    barGap={8}
-                                                                >
+                                                                    <BarChart
+                                                                     data={top10}
+                                                                     layout="vertical"
+                                                                     margin={{ left: 20, right: 20, top: 20, bottom: 40 }}
+                                                                     barCategoryGap={"20%"}
+                                                                     barGap={8}
+                                                                 >
                                                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                                                                     <XAxis
                                                                         type="number"
                                                                         dataKey="quantity"
                                                                         stroke="#64748b"
                                                                         fontSize={12}
-                                                                        label={{ value: 'Units Sold', position: 'insideBottom', offset: 10 }}
+                                                                        label={{ value: 'Units Sold', position: 'bottom', offset: 10 }}
                                                                         domain={[0, Math.ceil(maxQuantity * 1.2)]}
                                                                     />
                                                                     <YAxis
@@ -606,12 +606,18 @@ function EnhancedReportsPage() {
 
                                         <ChartCard title={isAllTime ? `Product Type Sales Comparison (All Time)` : `Product Type Sales Comparison – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={BarChart3}>
                                             <ResponsiveContainer width="100%" height={300}>
-                                                <BarChart data={salesByProductType}>
+                                                <BarChart data={salesByProductType} margin={{ top: 20, right: 20, left: 20, bottom: 80 }}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                                                    <XAxis dataKey="type" stroke="#64748b" fontSize={12} label={{ value: 'Product Type', position: 'insideBottom', offset: -5 }} />
+                                                    <XAxis
+                                                      dataKey="type"
+                                                      stroke="#64748b"
+                                                      fontSize={12}
+                                                      tickMargin={10}
+                                                      label={{ value: 'Product Type', position: 'insideBottom', offset: 20 }}
+                                                    />
                                                     <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }} />
                                                     <Tooltip content={<CustomTooltip prefix="$" />} />
-                                                    <Legend />
+                                                    <Legend verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: 16 }} />
                                                     <Bar dataKey="retail" fill="#3B82F6" name="Retail" radius={[4, 4, 0, 0]} />
                                                     <Bar dataKey="wholesale" fill="#10B981" name="Wholesale" radius={[4, 4, 0, 0]} />
                                                 </BarChart>

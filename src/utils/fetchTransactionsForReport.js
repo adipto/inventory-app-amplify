@@ -269,12 +269,9 @@ export const fetchRetailTransactionsForYear = async (idToken, year) => {
     try {
         const client = createDynamoDBClient(idToken);
         
-        // Calculate start and end timestamps for the year
-        const startDate = new Date(year, 0, 1); // January 1st
-        const endDate = new Date(year, 11, 31, 23, 59, 59, 999); // December 31st
-        
-        const startTimestamp = Math.floor(startDate.getTime() / 1000);
-        const endTimestamp = Math.floor(endDate.getTime() / 1000);
+        // Calculate start and end timestamps for the year in milliseconds (to match stored Timestamp)
+        const startTimestamp = Date.UTC(year, 0, 1); // ms since epoch
+        const endTimestamp = Date.UTC(year, 11, 31, 23, 59, 59, 999); // ms since epoch
         
         console.log(`Fetching retail transactions for year ${year} (${startTimestamp} - ${endTimestamp})`);
         
