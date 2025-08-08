@@ -370,29 +370,6 @@ function EnhancedReportsPage() {
                                         {dataLoading ? 'Loading...' : 'Generate All Time Reports'}
                                     </button>
                                 )}
-                                {/* {!isAllTime && (
-                                <div className="flex gap-2">
-                                    <button
-                                    onClick={async () => {
-                                        const session = await fetchAuthSession();
-                                        const idToken = session.tokens?.idToken?.toString();
-                                        if (!idToken) return;
-                                        // wholesale ALL (scan)
-                                        const { fetchAllWholesaleTransactions, fetchRetailTransactionsForYear,fetchWholesaleTransactionsForYear } = await import("../utils/fetchTransactionsForReport");
-                                        const allW = await fetchAllWholesaleTransactions(idToken);
-                                        console.log("ALL wholesale (scan) ->", allW.length, allW.slice(0, 5));
-                                        // retail YEAR (query on TimestampIndex)
-                                        const retailY = await fetchRetailTransactionsForYear(idToken, selectedYearOnly);
-                                        console.log(`Retail YEAR ${selectedYearOnly} ->`, retailY.length, retailY.slice(0, 5));
-                                        const wholesaleY = await fetchWholesaleTransactionsForYear(idToken, selectedYearOnly);
-console.log(`Wholesale YEAR ${selectedYearOnly} ->`, wholesaleY.length, wholesaleY.slice(0,5));
-                                    }}
-                                    className="ml-3 bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-2 rounded"
-                                    >
-                                    Run Yearly Console Test
-                                    </button>
-                                </div>
-                                )} */}
 
                             </div>
 
