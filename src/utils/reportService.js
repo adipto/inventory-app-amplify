@@ -1,47 +1,82 @@
 // src/utils/reportService.js
-import { fetchRetailTransactions, fetchWholesaleTransactions } from "../api/fetchTransactions";
+import { 
+    fetchRetailTransactionsForMonth, 
+    fetchWholesaleTransactionsForMonth,
+    fetchAllRetailTransactions,
+    fetchAllWholesaleTransactions,
+    fetchRetailTransactionsForYear,
+    fetchWholesaleTransactionsForYear
+} from "./fetchTransactionsForReport";
+import { fetchAuthSession } from "aws-amplify/auth";
 import dayjs from "dayjs";
 
 // Fetch reports for a specific month and year (for all charts except cumulative profit)
 export const fetchTransactionReports = async (idToken, month, year) => {
-    // Query for the specific month and year
-    const retail = await fetchRetailTransactions(idToken, month, year);
-    const wholesale = await fetchWholesaleTransactions(idToken, month, year);
+    try {
+        console.log(`Fetching transaction reports for ${month}/${year}`);
+        
+        // Fetch data for the specific month and year using GSI queries
+        const [retail, wholesale] = await Promise.all([
+            fetchRetailTransactionsForMonth(idToken, month, year),
+            fetchWholesaleTransactionsForMonth(idToken, month, year)
+        ]);
 
-    return processTransactionData(retail, wholesale, month, year, false);
+        console.log(`Retrieved ${retail.length} retail and ${wholesale.length} wholesale transactions`);
+
+        return processTransactionData(retail, wholesale, month, year, "monthly");
+        
+    } catch (error) {
+        console.error(`Error in fetchTransactionReports for ${month}/${year}:`, error);
+        throw error;
+    }
 };
 
 // Fetch all transactions for a specific year (for cumulative profit chart)
 export const fetchYearlyTransactions = async (idToken, year) => {
-    // Prepare all 12 months in parallel
-    const retailPromises = [];
-    const wholesalePromises = [];
-    for (let month = 1; month <= 12; month++) {
-        retailPromises.push(fetchRetailTransactions(idToken, month, year));
-        wholesalePromises.push(fetchWholesaleTransactions(idToken, month, year));
+    try {
+        console.log(`Fetching yearly transaction reports for ${year}`);
+        
+        // Fetch all transactions for the entire year using GSI queries
+        const [retail, wholesale] = await Promise.all([
+            fetchRetailTransactionsForYear(idToken, year),
+            fetchWholesaleTransactionsForYear(idToken, year)
+        ]);
+
+        console.log(`Retrieved ${retail.length} retail and ${wholesale.length} wholesale transactions for year ${year}`);
+
+        return processTransactionData(retail, wholesale, null, year, "yearly");
+        
+    } catch (error) {
+        console.error(`Error in fetchYearlyTransactions for ${year}:`, error);
+        throw error;
     }
-    // Wait for all to finish
-    const retailResults = await Promise.all(retailPromises);
-    const wholesaleResults = await Promise.all(wholesalePromises);
-
-    // Flatten arrays
-    const retail = retailResults.flat();
-    const wholesale = wholesaleResults.flat();
-
-    return processTransactionData(retail, wholesale, null, year, "yearly");
 };
 
-// Fetch all-time reports (scan)
+// Fetch all-time reports (scan all tables)
 export const fetchAllTimeReports = async (idToken) => {
-    const retail = await fetchRetailTransactions(idToken); // scan
-    const wholesale = await fetchWholesaleTransactions(idToken); // scan
+    try {
+        console.log("Fetching all-time transaction reports");
+        
+        // Scan all transactions from both tables
+        const [retail, wholesale] = await Promise.all([
+            fetchAllRetailTransactions(idToken),
+            fetchAllWholesaleTransactions(idToken)
+        ]);
 
-    return processTransactionData(retail, wholesale, null, null, true);
+        console.log(`Retrieved ${retail.length} retail and ${wholesale.length} wholesale transactions (all-time)`);
+
+        return processTransactionData(retail, wholesale, null, null, "alltime");
+        
+    } catch (error) {
+        console.error("Error in fetchAllTimeReports:", error);
+        throw error;
+    }
 };
 
 // Helper function to process transaction data
 const processTransactionData = (retail, wholesale, month, year, mode) => {
-    // mode: false = month+year, "yearly" = year only, true = all time
+    console.log(`Processing transaction data - Mode: ${mode}, Month: ${month}, Year: ${year}`);
+    
     const formatDate = (d) => dayjs(d).format("YYYY-MM-DD");
     const formatMonth = (d) => dayjs(d).format("MMM YYYY");
     const formatDayOfWeek = (d) => dayjs(d).format("dddd");
@@ -56,7 +91,6 @@ const processTransactionData = (retail, wholesale, month, year, mode) => {
     const productMap = {};
     const profitByCategory = {};
     const profitByType = { retail: 0, wholesale: 0 };
-    const cumulativeProfit = [];
     const customerFrequency = {};
     const dayOfWeekMap = {};
     const weeklyMap = {};
@@ -64,83 +98,126 @@ const processTransactionData = (retail, wholesale, month, year, mode) => {
 
     let allTransactions = [];
 
-    const process = (list, type) => {
-        list.forEach(txn => {
-            const txnDate = dayjs(txn.Date);
+    const processTransactions = (transactions, type) => {
+        transactions.forEach(txn => {
+            try {
+                // Validate transaction data
+                if (!txn.Date) {
+                    console.warn(`Transaction missing date:`, txn);
+                    return;
+                }
 
-            // Filtering logic
-            if (mode === false && month && year) {
-                // Only for selected month and year
-                if (txnDate.month() + 1 !== month || txnDate.year() !== year) return;
-            } else if (mode === "yearly" && year) {
-                // Only for selected year
-                if (txnDate.year() !== year) return;
+                const txnDate = dayjs(txn.Date);
+                
+                // Additional filtering based on mode (though GSI queries should handle most filtering)
+                if (mode === "monthly" && month && year) {
+                    if (txnDate.month() + 1 !== month || txnDate.year() !== year) return;
+                } else if (mode === "yearly" && year) {
+                    if (txnDate.year() !== year) return;
+                }
+                // mode === "alltime": no additional filter
+
+                const date = formatDate(txn.Date);
+                const monthYear = formatMonth(txn.Date);
+                const dayOfWeek = formatDayOfWeek(txn.Date);
+                const week = formatWeek(txn.Date);
+
+                // Handle different quantity fields for retail vs wholesale
+                const quantity = type === 'retail' 
+                    ? (txn.Quantity_Pcs || 0)
+                    : (txn.Quantity_Packets || 0);
+
+                // Handle different price fields for retail vs wholesale  
+                const unitPrice = type === 'retail' 
+                    ? (txn.SellingPrice_Per_Pc || 0)
+                    : (txn.SellingPrice_Per_Packet || 0);
+
+                const revenue = unitPrice * quantity;
+                const profit = txn.NetProfit || 0;
+                
+                // Create product key with variation if available
+                const productVariation = txn.ProductVariation || '';
+                const productKey = productVariation 
+                    ? `${txn.ProductName} (${productVariation})`
+                    : txn.ProductName;
+                
+                const productType = txn.ProductName || 'Unknown';
+                const customerID = txn.CustomerID || 'Unknown';
+
+                // Add to all transactions array for sorting later
+                allTransactions.push({
+                    ...txn,
+                    date,
+                    revenue,
+                    profit,
+                    quantity,
+                    type
+                });
+
+                // Daily Sales aggregation
+                if (!dailySalesMap[date]) {
+                    dailySalesMap[date] = { date, retail: 0, wholesale: 0 };
+                }
+                dailySalesMap[date][type] += revenue;
+
+                // Monthly Summary aggregation
+                if (!monthlyMap[monthYear]) {
+                    monthlyMap[monthYear] = { month: monthYear, revenue: 0, quantity: 0, profit: 0 };
+                }
+                monthlyMap[monthYear].revenue += revenue;
+                monthlyMap[monthYear].quantity += quantity;
+                monthlyMap[monthYear].profit += profit;
+
+                // Top Products aggregation
+                if (!productMap[productKey]) {
+                    productMap[productKey] = { product: productKey, quantity: 0, revenue: 0 };
+                }
+                productMap[productKey].quantity += quantity;
+                productMap[productKey].revenue += revenue;
+
+                // Profit by Product Category
+                if (!profitByCategory[productType]) {
+                    profitByCategory[productType] = 0;
+                }
+                profitByCategory[productType] += profit;
+
+                // Profit by Retail/Wholesale
+                profitByType[type] += profit;
+
+                // Day of Week Volume (for weekly transaction patterns)
+                if (!dayOfWeekMap[dayOfWeek]) {
+                    dayOfWeekMap[dayOfWeek] = 0;
+                }
+                dayOfWeekMap[dayOfWeek] += 1;
+
+                // Weekly patterns
+                if (!weeklyMap[week]) {
+                    weeklyMap[week] = { week, count: 0, revenue: 0 };
+                }
+                weeklyMap[week].count += 1;
+                weeklyMap[week].revenue += revenue;
+
+                // Product Type Breakdown
+                if (!productTypeMap[productType]) {
+                    productTypeMap[productType] = { type: productType, retail: 0, wholesale: 0 };
+                }
+                productTypeMap[productType][type] += revenue;
+
+                // Customer Frequency
+                if (!customerFrequency[customerID]) {
+                    customerFrequency[customerID] = 0;
+                }
+                customerFrequency[customerID]++;
+
+            } catch (error) {
+                console.error(`Error processing transaction:`, error, txn);
             }
-            // mode === true (all time): no filter
-
-            const date = formatDate(txn.Date);
-            const monthYear = formatMonth(txn.Date);
-            const dayOfWeek = formatDayOfWeek(txn.Date);
-            const week = formatWeek(txn.Date);
-            const quantity = txn.Quantity_Pcs || txn.Quantity_Packets || 0;
-            const revenue = (txn.SellingPrice_Per_Pc || txn.SellingPrice_Per_Packet || 0) * quantity;
-            const profit = txn.NetProfit || 0;
-            const productKey = `${txn.ProductName} (${txn.ProductVariation})`;
-            const productType = txn.ProductName;
-            const customerID = txn.CustomerID;
-
-            allTransactions.push({
-                ...txn,
-                date,
-                revenue,
-                profit,
-                quantity,
-                type
-            });
-
-            // Daily Sales
-            if (!dailySalesMap[date]) dailySalesMap[date] = { date, retail: 0, wholesale: 0 };
-            dailySalesMap[date][type] += revenue;
-
-            // Monthly Summary
-            if (!monthlyMap[monthYear]) monthlyMap[monthYear] = { month: monthYear, revenue: 0, quantity: 0, profit: 0 };
-            monthlyMap[monthYear].revenue += revenue;
-            monthlyMap[monthYear].quantity += quantity;
-            monthlyMap[monthYear].profit += profit;
-
-            // Top Products
-            if (!productMap[productKey]) productMap[productKey] = { product: productKey, quantity: 0, revenue: 0 };
-            productMap[productKey].quantity += quantity;
-            productMap[productKey].revenue += revenue;
-
-            // Profit by Product Category
-            if (!profitByCategory[productType]) profitByCategory[productType] = 0;
-            profitByCategory[productType] += profit;
-
-            // Profit by Retail/Wholesale
-            profitByType[type] += profit;
-
-            // Day of Week Volume (for weekly transaction patterns)
-            if (!dayOfWeekMap[dayOfWeek]) dayOfWeekMap[dayOfWeek] = 0;
-            dayOfWeekMap[dayOfWeek] += 1;
-
-            // Weekly patterns (for the selected month)
-            if (!weeklyMap[week]) weeklyMap[week] = { week, count: 0, revenue: 0 };
-            weeklyMap[week].count += 1;
-            weeklyMap[week].revenue += revenue;
-
-            // Product Type Breakdown
-            if (!productTypeMap[productType]) productTypeMap[productType] = { type: productType, retail: 0, wholesale: 0 };
-            productTypeMap[productType][type] += revenue;
-
-            // Customer Frequency
-            if (!customerFrequency[customerID]) customerFrequency[customerID] = 0;
-            customerFrequency[customerID]++;
         });
     };
 
-    process(retail, "retail");
-    process(wholesale, "wholesale");
+    // Process both retail and wholesale transactions
+    processTransactions(retail, "retail");
+    processTransactions(wholesale, "wholesale");
 
     // Sort all transactions by date for cumulative profit calculation
     allTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -152,22 +229,23 @@ const processTransactionData = (retail, wholesale, month, year, mode) => {
         cumulativeSum += txn.profit;
         cumulativeProfitMap[txn.date] = cumulativeSum;
     });
+
     const cumulativeProfitArray = Object.entries(cumulativeProfitMap).map(([date, cumulative]) => ({
         date,
         cumulative
     }));
 
-    // For weekly transaction patterns, we want to show days of the week
+    // Weekly transaction patterns - ordered by days of the week
     const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const orderedDayOfWeek = daysOrder.map(day => ({
         day,
         count: dayOfWeekMap[day] || 0
     }));
 
-    return {
+    const result = {
         dailySales: Object.values(dailySalesMap).sort((a, b) => new Date(a.date) - new Date(b.date)),
         monthlySummary: Object.values(monthlyMap).sort((a, b) => {
-            if (mode === true || mode === "yearly") {
+            if (mode === "alltime" || mode === "yearly") {
                 return dayjs(a.month, 'MMM YYYY').valueOf() - dayjs(b.month, 'MMM YYYY').valueOf();
             }
             return 0;
@@ -193,6 +271,16 @@ const processTransactionData = (retail, wholesale, month, year, mode) => {
         weeklyTransactions: Object.values(weeklyMap)
             .sort((a, b) => new Date(a.week.split(' - ')[0]) - new Date(b.week.split(' - ')[0]))
     };
+
+    console.log(`Processed data summary:`, {
+        dailySales: result.dailySales.length,
+        monthlySummary: result.monthlySummary.length,
+        topProducts: result.topProducts.length,
+        profitByCategory: result.profitByCategory.length,
+        totalTransactions: allTransactions.length
+    });
+
+    return result;
 };
 
 // Helper function to get month name from number

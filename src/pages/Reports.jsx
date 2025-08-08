@@ -172,6 +172,10 @@ function EnhancedReportsPage() {
     const [user, setUser] = useState(null);
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    // NEW state for the Year-only section
+    const [selectedYearOnly, setSelectedYearOnly] = useState(new Date().getFullYear());
+    const [yearOnlySummary, setYearOnlySummary] = useState([]); // we'll feed this to SummaryStats
+
     const [isAllTime, setIsAllTime] = useState(false);
     const [loading, setLoading] = useState(true);
     const [dataLoading, setDataLoading] = useState(false);
@@ -237,6 +241,28 @@ function EnhancedReportsPage() {
             setDataLoading(false);
         }
     };
+
+    const loadYearOnly = async () => {
+        if (!user) return;
+        try {
+          const session = await fetchAuthSession();
+          const idToken = session.tokens?.idToken?.toString();
+          if (!idToken) return;
+      
+          const yearly = await fetchYearlyTransactions(idToken, selectedYearOnly);
+          console.log("Year-only result:", yearly); // <- shows in console
+          console.table(yearly.monthlySummary);
+          setYearOnlySummary(yearly.monthlySummary || []);
+        } catch (e) {
+          console.error("Error loading year-only report:", e);
+        }
+      };
+      
+      // run when user or selectedYearOnly changes
+      useEffect(() => {
+        loadYearOnly();
+      }, [user, selectedYearOnly]);
+      
 
     useEffect(() => {
         loadReports();
@@ -343,7 +369,51 @@ function EnhancedReportsPage() {
                                         {dataLoading ? 'Loading...' : 'Generate All Time Reports'}
                                     </button>
                                 )}
+                                {!isAllTime && (
+                                <div className="flex gap-2">
+                                    <button
+                                    onClick={async () => {
+                                        const session = await fetchAuthSession();
+                                        const idToken = session.tokens?.idToken?.toString();
+                                        if (!idToken) return;
+                                        // wholesale ALL (scan)
+                                        const { fetchAllWholesaleTransactions, fetchRetailTransactionsForYear,fetchWholesaleTransactionsForYear } = await import("../utils/fetchTransactionsForReport");
+                                        const allW = await fetchAllWholesaleTransactions(idToken);
+                                        console.log("ALL wholesale (scan) ->", allW.length, allW.slice(0, 5));
+                                        // retail YEAR (query on TimestampIndex)
+                                        const retailY = await fetchRetailTransactionsForYear(idToken, selectedYearOnly);
+                                        console.log(`Retail YEAR ${selectedYearOnly} ->`, retailY.length, retailY.slice(0, 5));
+                                        const wholesaleY = await fetchWholesaleTransactionsForYear(idToken, selectedYearOnly);
+console.log(`Wholesale YEAR ${selectedYearOnly} ->`, wholesaleY.length, wholesaleY.slice(0,5));
+                                    }}
+                                    className="ml-3 bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-2 rounded"
+                                    >
+                                    Run Yearly Console Test
+                                    </button>
+                                </div>
+                                )}
+
                             </div>
+
+                            {/* === Year-only section (always visible) === */}
+                            <div className="mb-6">
+                            <div className="flex items-center gap-3 mb-3">
+                                <Calendar className="w-5 h-5 text-gray-500" />
+                                <span className="text-sm font-medium text-gray-700">Year-only:</span>
+                                <select
+                                value={selectedYearOnly}
+                                onChange={(e) => setSelectedYearOnly(parseInt(e.target.value))}
+                                className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i)
+                                    .map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Year-only totals */}
+                            <SummaryStats data={yearOnlySummary} />
+                            </div>
+
                             
                             {/* Date Selector - Only show when not in all-time mode */}
                             {!isAllTime && (

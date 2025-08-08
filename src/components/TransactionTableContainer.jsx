@@ -10,7 +10,7 @@ import {
   fetchCustomerDetails,
   fetchRetailTransactions,
   fetchWholesaleTransactions,
-} from "../api/fetchTransactions";
+} from "../utils/fetchTransactions";
 import DeleteConfirmModal from "../utils/DeleteConfirmModal";
 import AddTransactionModal from "./AddTransactionModal";
 import TransactionTableView from "./TransactionTableView";

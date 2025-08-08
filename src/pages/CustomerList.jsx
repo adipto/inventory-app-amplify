@@ -8,7 +8,7 @@ import { UserPlus, Pencil, Trash2, Filter, Search, Phone, Mail, MapPin } from "l
 import { createDynamoDBClient } from "../aws/aws-config";
 import { ScanCommand, DeleteItemCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
-import { fetchCustomers as fetchCustomersAPI } from "../api/fetchCustomers";
+import { fetchCustomers as fetchCustomersAPI } from "../utils/fetchCustomers";
 
 function CustomerList() {
     // All hooks at the top

@@ -1,13 +1,12 @@
 // src/utils/capitalManagementService.js
-import { 
-  ScanCommand, 
+import {  
   PutItemCommand, 
   GetItemCommand, 
   UpdateItemCommand 
 } from "@aws-sdk/client-dynamodb";
 import { createDynamoDBClient } from "../aws/aws-config";
 import { fetchStock } from "./stockService";
-import { fetchRetailTransactions, fetchWholesaleTransactions } from "../api/fetchTransactions";
+import { fetchRetailTransactions, fetchWholesaleTransactions } from "./fetchTransactions";
 
 const CAPITAL_MANAGEMENT_TABLE = "Capital_Management";
 
