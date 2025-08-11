@@ -180,40 +180,10 @@ const fetchRetailTransactionsDateIndex = async (client, limit, startKey) => {
             lastEvaluatedKey: null
         };
     } else {
-        // Final fallback to scan
-        const scanParams = {
-            TableName: "Transaction_Retail",
-            Limit: Math.max(limit * 10, 500)
-        };
-        
-        if (startKey) {
-            scanParams.ExclusiveStartKey = startKey;
-        }
-        
-        const command = new ScanCommand(scanParams);
-        const response = await client.send(command);
-        
-        const items = response.Items.map(item => unmarshall(item));
-        
-        // Sort with Timestamp priority
-        items.sort((a, b) => {
-            if (a.Timestamp && b.Timestamp) {
-                return parseInt(b.Timestamp) - parseInt(a.Timestamp);
-            }
-            
-            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
-            
-            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-                return (b.Date || '').localeCompare(a.Date || '');
-            }
-            
-            return dateTimeB - dateTimeA;
-        });
-        
+        // Return empty result if no items found
         return {
-            items: items.slice(0, limit),
-            lastEvaluatedKey: response.LastEvaluatedKey || null
+            items: [],
+            lastEvaluatedKey: null
         };
     }
 };
@@ -284,40 +254,10 @@ const fetchWholesaleTransactionsDateIndex = async (client, limit, startKey) => {
             lastEvaluatedKey: null
         };
     } else {
-        // Final fallback to scan
-        const scanParams = {
-            TableName: "Transaction_Wholesale",
-            Limit: Math.max(limit * 10, 500)
-        };
-        
-        if (startKey) {
-            scanParams.ExclusiveStartKey = startKey;
-        }
-        
-        const command = new ScanCommand(scanParams);
-        const response = await client.send(command);
-        
-        const items = response.Items.map(item => unmarshall(item));
-        
-        // Sort with Timestamp priority
-        items.sort((a, b) => {
-            if (a.Timestamp && b.Timestamp) {
-                return parseInt(b.Timestamp) - parseInt(a.Timestamp);
-            }
-            
-            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
-            
-            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-                return (b.Date || '').localeCompare(a.Date || '');
-            }
-            
-            return dateTimeB - dateTimeA;
-        });
-        
+        // Return empty result if no items found
         return {
-            items: items.slice(0, limit),
-            lastEvaluatedKey: response.LastEvaluatedKey || null
+            items: [],
+            lastEvaluatedKey: null
         };
     }
 };
