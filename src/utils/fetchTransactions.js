@@ -115,255 +115,255 @@ export const fetchWholesaleTransactions = async (idToken, limit = 10, startKey =
 };
 
 // Fallback function for retail transactions using DateIndex (existing logic)
-// const fetchRetailTransactionsDateIndex = async (client, limit, startKey) => {
-//     let allItems = [];
+const fetchRetailTransactionsDateIndex = async (client, limit, startKey) => {
+    let allItems = [];
 
-//     // Strategy: Query multiple recent dates to get comprehensive results
-//     const dates = [];
-//     for (let i = 0; i < 60; i++) {
-//         const date = new Date();
-//         date.setDate(date.getDate() - i);
-//         dates.push(date.toISOString().split('T')[0]);
-//     }
+    // Strategy: Query multiple recent dates to get comprehensive results
+    const dates = [];
+    for (let i = 0; i < 60; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        dates.push(date.toISOString().split('T')[0]);
+    }
 
-//     // Query each date until we have enough items
-//     for (const dateValue of dates) {
-//         if (allItems.length >= limit * 2) break;
+    // Query each date until we have enough items
+    for (const dateValue of dates) {
+        if (allItems.length >= limit * 2) break;
         
-//         try {
-//             const params = {
-//                 TableName: "Transaction_Retail",
-//                 IndexName: "DateIndex",
-//                 KeyConditionExpression: "#dateAttr = :dateValue",
-//                 ExpressionAttributeNames: {
-//                     "#dateAttr": "Date"
-//                 },
-//                 ExpressionAttributeValues: {
-//                     ":dateValue": { S: dateValue }
-//                 },
-//                 ScanIndexForward: false,
-//                 Limit: 50
-//             };
+        try {
+            const params = {
+                TableName: "Transaction_Retail",
+                IndexName: "DateIndex",
+                KeyConditionExpression: "#dateAttr = :dateValue",
+                ExpressionAttributeNames: {
+                    "#dateAttr": "Date"
+                },
+                ExpressionAttributeValues: {
+                    ":dateValue": { S: dateValue }
+                },
+                ScanIndexForward: false,
+                Limit: 50
+            };
 
-//             const command = new QueryCommand(params);
-//             const response = await client.send(command);
+            const command = new QueryCommand(params);
+            const response = await client.send(command);
             
-//             if (response.Items && response.Items.length > 0) {
-//                 const items = response.Items.map(item => unmarshall(item));
-//                 allItems.push(...items);
-//             }
-//         } catch (dateError) {
-//             console.log(`Error querying date ${dateValue}:`, dateError.message);
-//             continue;
-//         }
-//     }
+            if (response.Items && response.Items.length > 0) {
+                const items = response.Items.map(item => unmarshall(item));
+                allItems.push(...items);
+            }
+        } catch (dateError) {
+            console.log(`Error querying date ${dateValue}:`, dateError.message);
+            continue;
+        }
+    }
 
-//     if (allItems.length > 0) {
-//         // Sort by Timestamp first, then fallback to Date+Time
-//         allItems.sort((a, b) => {
-//             if (a.Timestamp && b.Timestamp) {
-//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
-//             }
+    if (allItems.length > 0) {
+        // Sort by Timestamp first, then fallback to Date+Time
+        allItems.sort((a, b) => {
+            if (a.Timestamp && b.Timestamp) {
+                return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+            }
             
-//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
             
-//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-//                 return (b.Date || '').localeCompare(a.Date || '');
-//             }
+            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+                return (b.Date || '').localeCompare(a.Date || '');
+            }
             
-//             return dateTimeB - dateTimeA;
-//         });
+            return dateTimeB - dateTimeA;
+        });
 
-//         return {
-//             items: allItems.slice(0, limit),
-//             lastEvaluatedKey: null
-//         };
-//     } else {
-//         // Final fallback to scan
-//         const scanParams = {
-//             TableName: "Transaction_Retail",
-//             Limit: Math.max(limit * 10, 500)
-//         };
+        return {
+            items: allItems.slice(0, limit),
+            lastEvaluatedKey: null
+        };
+    } else {
+        // Final fallback to scan
+        const scanParams = {
+            TableName: "Transaction_Retail",
+            Limit: Math.max(limit * 10, 500)
+        };
         
-//         if (startKey) {
-//             scanParams.ExclusiveStartKey = startKey;
-//         }
+        if (startKey) {
+            scanParams.ExclusiveStartKey = startKey;
+        }
         
-//         const command = new ScanCommand(scanParams);
-//         const response = await client.send(command);
+        const command = new ScanCommand(scanParams);
+        const response = await client.send(command);
         
-//         const items = response.Items.map(item => unmarshall(item));
+        const items = response.Items.map(item => unmarshall(item));
         
-//         // Sort with Timestamp priority
-//         items.sort((a, b) => {
-//             if (a.Timestamp && b.Timestamp) {
-//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
-//             }
+        // Sort with Timestamp priority
+        items.sort((a, b) => {
+            if (a.Timestamp && b.Timestamp) {
+                return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+            }
             
-//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
             
-//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-//                 return (b.Date || '').localeCompare(a.Date || '');
-//             }
+            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+                return (b.Date || '').localeCompare(a.Date || '');
+            }
             
-//             return dateTimeB - dateTimeA;
-//         });
+            return dateTimeB - dateTimeA;
+        });
         
-//         return {
-//             items: items.slice(0, limit),
-//             lastEvaluatedKey: response.LastEvaluatedKey || null
-//         };
-//     }
-// };
+        return {
+            items: items.slice(0, limit),
+            lastEvaluatedKey: response.LastEvaluatedKey || null
+        };
+    }
+};
 
 // Fallback function for wholesale transactions using DateIndex (existing logic)
-// const fetchWholesaleTransactionsDateIndex = async (client, limit, startKey) => {
-//     let allItems = [];
+const fetchWholesaleTransactionsDateIndex = async (client, limit, startKey) => {
+    let allItems = [];
 
-//     // Strategy: Query multiple recent dates to get comprehensive results
-//     const dates = [];
-//     for (let i = 0; i < 60; i++) {
-//         const date = new Date();
-//         date.setDate(date.getDate() - i);
-//         dates.push(date.toISOString().split('T')[0]);
-//     }
+    // Strategy: Query multiple recent dates to get comprehensive results
+    const dates = [];
+    for (let i = 0; i < 60; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        dates.push(date.toISOString().split('T')[0]);
+    }
 
-//     // Query each date until we have enough items
-//     for (const dateValue of dates) {
-//         if (allItems.length >= limit * 2) break;
+    // Query each date until we have enough items
+    for (const dateValue of dates) {
+        if (allItems.length >= limit * 2) break;
         
-//         try {
-//             const params = {
-//                 TableName: "Transaction_Wholesale",
-//                 IndexName: "DateIndex",
-//                 KeyConditionExpression: "#dateAttr = :dateValue",
-//                 ExpressionAttributeNames: {
-//                     "#dateAttr": "Date"
-//                 },
-//                 ExpressionAttributeValues: {
-//                     ":dateValue": { S: dateValue }
-//                 },
-//                 ScanIndexForward: false,
-//                 Limit: 50
-//             };
+        try {
+            const params = {
+                TableName: "Transaction_Wholesale",
+                IndexName: "DateIndex",
+                KeyConditionExpression: "#dateAttr = :dateValue",
+                ExpressionAttributeNames: {
+                    "#dateAttr": "Date"
+                },
+                ExpressionAttributeValues: {
+                    ":dateValue": { S: dateValue }
+                },
+                ScanIndexForward: false,
+                Limit: 50
+            };
 
-//             const command = new QueryCommand(params);
-//             const response = await client.send(command);
+            const command = new QueryCommand(params);
+            const response = await client.send(command);
             
-//             if (response.Items && response.Items.length > 0) {
-//                 const items = response.Items.map(item => unmarshall(item));
-//                 allItems.push(...items);
-//             }
-//         } catch (dateError) {
-//             console.log(`Error querying date ${dateValue}:`, dateError.message);
-//             continue;
-//         }
-//     }
+            if (response.Items && response.Items.length > 0) {
+                const items = response.Items.map(item => unmarshall(item));
+                allItems.push(...items);
+            }
+        } catch (dateError) {
+            console.log(`Error querying date ${dateValue}:`, dateError.message);
+            continue;
+        }
+    }
 
-//     if (allItems.length > 0) {
-//         // Sort by Timestamp first, then fallback to Date+Time
-//         allItems.sort((a, b) => {
-//             if (a.Timestamp && b.Timestamp) {
-//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
-//             }
+    if (allItems.length > 0) {
+        // Sort by Timestamp first, then fallback to Date+Time
+        allItems.sort((a, b) => {
+            if (a.Timestamp && b.Timestamp) {
+                return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+            }
             
-//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
             
-//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-//                 return (b.Date || '').localeCompare(a.Date || '');
-//             }
+            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+                return (b.Date || '').localeCompare(a.Date || '');
+            }
             
-//             return dateTimeB - dateTimeA;
-//         });
+            return dateTimeB - dateTimeA;
+        });
 
-//         return {
-//             items: allItems.slice(0, limit),
-//             lastEvaluatedKey: null
-//         };
-//     } else {
-//         // Final fallback to scan
-//         const scanParams = {
-//             TableName: "Transaction_Wholesale",
-//             Limit: Math.max(limit * 10, 500)
-//         };
+        return {
+            items: allItems.slice(0, limit),
+            lastEvaluatedKey: null
+        };
+    } else {
+        // Final fallback to scan
+        const scanParams = {
+            TableName: "Transaction_Wholesale",
+            Limit: Math.max(limit * 10, 500)
+        };
         
-//         if (startKey) {
-//             scanParams.ExclusiveStartKey = startKey;
-//         }
+        if (startKey) {
+            scanParams.ExclusiveStartKey = startKey;
+        }
         
-//         const command = new ScanCommand(scanParams);
-//         const response = await client.send(command);
+        const command = new ScanCommand(scanParams);
+        const response = await client.send(command);
         
-//         const items = response.Items.map(item => unmarshall(item));
+        const items = response.Items.map(item => unmarshall(item));
         
-//         // Sort with Timestamp priority
-//         items.sort((a, b) => {
-//             if (a.Timestamp && b.Timestamp) {
-//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
-//             }
+        // Sort with Timestamp priority
+        items.sort((a, b) => {
+            if (a.Timestamp && b.Timestamp) {
+                return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+            }
             
-//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
             
-//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-//                 return (b.Date || '').localeCompare(a.Date || '');
-//             }
+            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+                return (b.Date || '').localeCompare(a.Date || '');
+            }
             
-//             return dateTimeB - dateTimeA;
-//         });
+            return dateTimeB - dateTimeA;
+        });
         
-//         return {
-//             items: items.slice(0, limit),
-//             lastEvaluatedKey: response.LastEvaluatedKey || null
-//         };
-//     }
-// };
+        return {
+            items: items.slice(0, limit),
+            lastEvaluatedKey: response.LastEvaluatedKey || null
+        };
+    }
+};
 
 // Ultra-optimized fetch function for all recent transactions
-// export const fetchAllRecentTransactions = async (idToken, limit = 50) => {
-//     try {
-//         const [retailData, wholesaleData] = await Promise.all([
-//             fetchRetailTransactions(idToken, limit),
-//             fetchWholesaleTransactions(idToken, limit),
-//         ]);
+export const fetchAllRecentTransactions = async (idToken, limit = 50) => {
+    try {
+        const [retailData, wholesaleData] = await Promise.all([
+            fetchRetailTransactions(idToken, limit),
+            fetchWholesaleTransactions(idToken, limit),
+        ]);
 
-//         // Combine and sort all transactions using Timestamp for ultimate precision
-//         const allTransactions = [
-//             ...retailData.items.map(tx => ({ ...tx, type: 'retail' })),
-//             ...wholesaleData.items.map(tx => ({ ...tx, type: 'wholesale' }))
-//         ];
-//         console.log("allTransactions", allTransactions);
+        // Combine and sort all transactions using Timestamp for ultimate precision
+        const allTransactions = [
+            ...retailData.items.map(tx => ({ ...tx, type: 'retail' })),
+            ...wholesaleData.items.map(tx => ({ ...tx, type: 'wholesale' }))
+        ];
+        console.log("allTransactions", allTransactions);
 
-//         // Sort combined transactions with Timestamp priority (most accurate)
-//         allTransactions.sort((a, b) => {
-//             // Primary sort: Timestamp (most accurate)
-//             if (a.Timestamp && b.Timestamp) {
-//                 return parseInt(b.Timestamp) - parseInt(a.Timestamp);
-//             }
+        // Sort combined transactions with Timestamp priority (most accurate)
+        allTransactions.sort((a, b) => {
+            // Primary sort: Timestamp (most accurate)
+            if (a.Timestamp && b.Timestamp) {
+                return parseInt(b.Timestamp) - parseInt(a.Timestamp);
+            }
             
-//             // Fallback sort: Date+Time parsing
-//             const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
-//             const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
+            // Fallback sort: Date+Time parsing
+            const dateTimeA = new Date(`${a.Date}T${a.Time || '00:00:00'}`);
+            const dateTimeB = new Date(`${b.Date}T${b.Time || '00:00:00'}`);
             
-//             if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
-//                 return (b.Date || '').localeCompare(a.Date || '');
-//             }
+            if (isNaN(dateTimeA.getTime()) || isNaN(dateTimeB.getTime())) {
+                return (b.Date || '').localeCompare(a.Date || '');
+            }
             
-//             return dateTimeB - dateTimeA;
-//         });
+            return dateTimeB - dateTimeA;
+        });
 
-//         return {
-//             items: allTransactions.slice(0, limit),
-//             hasMore: allTransactions.length >= limit
-//         };
-//     } catch (error) {
-//         console.error("Error fetching all recent transactions:", error);
-//         throw error;
-//     }
-// };
+        return {
+            items: allTransactions.slice(0, limit),
+            hasMore: allTransactions.length >= limit
+        };
+    } catch (error) {
+        console.error("Error fetching all recent transactions:", error);
+        throw error;
+    }
+};
 
 // Fetch customer details (unchanged)
 export const fetchCustomerDetails = async (idToken, customerIds) => {
