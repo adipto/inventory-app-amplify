@@ -31,18 +31,9 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
     const isCustomVariation = variation === "__custom__";
 
     const predefinedVariations = {
-        "Non-judicial stamp": [
-            "100-90",
-            "50-46",
-            "40-35",
-            "30-26",
-            "25-21",
-            "20-16",
-            "10-8",
-            "5-3"
-        ],
-        "Cartridge Paper": ["Cartridge_6"],
-        "Folio Paper": ["Folio_6"]
+        "Non-judicial stamp": [],
+        "Cartridge Paper": [],
+        "Folio Paper": []
     };
 
     // Helper function to get auth token using AWS Amplify
