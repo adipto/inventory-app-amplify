@@ -1,10 +1,11 @@
 // src/components/AddStockModal.jsx
 import React, { useState, Fragment, useEffect } from "react";
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from "@headlessui/react";
-import { X, Check } from "lucide-react";
+import { X, Check, RefreshCw } from "lucide-react";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { createDynamoDBClient } from "../aws/aws-config";
-import { PutItemCommand, GetItemCommand, UpdateItemCommand, DeleteItemCommand } from "@aws-sdk/client-dynamodb";
+import { PutItemCommand, GetItemCommand, UpdateItemCommand, DeleteItemCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
+import { unmarshall } from "@aws-sdk/util-dynamodb";
 import { getStockItem } from "../utils/stockService";
 
 function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
@@ -27,14 +28,14 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         const now = new Date();
         return now.toTimeString().slice(0, 5);
     });
-
-    const isCustomVariation = variation === "__custom__";
-
-    const predefinedVariations = {
+    const [predefinedVariations, setPredefinedVariations] = useState({
         "Non-judicial stamp": [],
         "Cartridge Paper": [],
         "Folio Paper": []
-    };
+    });
+    const [isLoadingVariations, setIsLoadingVariations] = useState(false);
+
+    const isCustomVariation = variation === "__custom__";
 
     // Helper function to get auth token using AWS Amplify
     const getAuthToken = async () => {
@@ -53,6 +54,81 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             throw new Error("Authentication failed. Please log in again.");
         }
     };
+
+    // Fetch all available variations from stock tables
+    const fetchAvailableVariations = async () => {
+        try {
+            setIsLoadingVariations(true);
+            const idToken = await getAuthToken();
+            const dynamoClient = createDynamoDBClient(idToken);
+
+            // Fetch from both retail and wholesale tables
+            const [retailResponse, wholesaleResponse] = await Promise.all([
+                dynamoClient.send(new ScanCommand({ TableName: "Retail_Stock" })),
+                dynamoClient.send(new ScanCommand({ TableName: "Wholesale_Stock" }))
+            ]);
+
+            // Process retail items
+            const retailItems = retailResponse.Items.map(item => unmarshall(item));
+            const wholesaleItems = wholesaleResponse.Items.map(item => unmarshall(item));
+
+            // Group variations by item type and stock type
+            const variationsByType = {
+                "Non-judicial stamp": { retail: [], wholesale: [] },
+                "Cartridge Paper": { retail: [], wholesale: [] },
+                "Folio Paper": { retail: [], wholesale: [] }
+            };
+
+            // Process retail items
+            retailItems.forEach(item => {
+                const itemType = item.ItemType;
+                const variationName = item.VariationName;
+                
+                if (itemType && variationName && variationsByType[itemType]) {
+                    if (!variationsByType[itemType].retail.includes(variationName)) {
+                        variationsByType[itemType].retail.push(variationName);
+                    }
+                }
+            });
+
+            // Process wholesale items
+            wholesaleItems.forEach(item => {
+                const itemType = item.ItemType;
+                const variationName = item.VariationName;
+                
+                if (itemType && variationName && variationsByType[itemType]) {
+                    if (!variationsByType[itemType].wholesale.includes(variationName)) {
+                        variationsByType[itemType].wholesale.push(variationName);
+                    }
+                }
+            });
+
+            // Sort variations alphabetically for each type and stock type
+            Object.keys(variationsByType).forEach(type => {
+                variationsByType[type].retail.sort();
+                variationsByType[type].wholesale.sort();
+            });
+
+            setPredefinedVariations(variationsByType);
+        } catch (error) {
+            console.error("Error fetching available variations:", error);
+            // Keep the default empty arrays if fetch fails
+        } finally {
+            setIsLoadingVariations(false);
+        }
+    };
+
+    // Load variations when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            fetchAvailableVariations();
+        }
+    }, [isOpen]);
+
+    // Reset variation when stock type changes
+    useEffect(() => {
+        setVariation("");
+    }, [stockType]);
 
     // Reset fields when modal closes or when switching between add/edit modes
     useEffect(() => {
@@ -264,6 +340,9 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                 await onStockAdded();
             }
             
+            // Refresh variations after adding stock
+            await fetchAvailableVariations();
+            
             onClose();
         } catch (err) {
             console.error("Error managing stock:", err);
@@ -400,13 +479,23 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                     <DialogTitle className="text-xl font-semibold text-gray-800">
                                         {isEdit ? "Edit Stock Item" : "Add Stock Item"}
                                     </DialogTitle>
-                                    <button
-                                        onClick={onClose}
-                                        className="p-1 rounded-full hover:bg-gray-100 transition-colors"
-                                        disabled={isLoading}
-                                    >
-                                        <X size={18} />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={fetchAvailableVariations}
+                                            disabled={isLoadingVariations}
+                                            className="p-1 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                            title="Refresh variations"
+                                        >
+                                            <RefreshCw size={16} className={`${isLoadingVariations ? 'animate-spin' : ''}`} />
+                                        </button>
+                                        <button
+                                            onClick={onClose}
+                                            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                            disabled={isLoading}
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -463,16 +552,28 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                             value={variation}
                                             onChange={(e) => setVariation(e.target.value)}
                                             className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            disabled={isLoading}
+                                            disabled={isLoading || isLoadingVariations}
                                         >
-                                            <option value="">Select a variation</option>
-                                            {predefinedVariations[itemType].map((v) => (
-                                                <option key={v} value={v}>
-                                                    {v}
-                                                </option>
-                                            ))}
+                                            <option value="">
+                                                {isLoadingVariations ? "Loading variations..." : "Select a variation"}
+                                            </option>
+                                                                                         {!isLoadingVariations && predefinedVariations[itemType]?.[stockType.toLowerCase()]?.map((v) => (
+                                                 <option key={v} value={v}>
+                                                     {v}
+                                                 </option>
+                                             ))}
                                             <option value="__custom__">Add a new variation manually...</option>
                                         </select>
+                                        {isLoadingVariations && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Loading available variations from your stock...
+                                            </p>
+                                        )}
+                                                                                 {!isLoadingVariations && predefinedVariations[itemType]?.[stockType.toLowerCase()]?.length === 0 && (
+                                             <p className="text-xs text-gray-500 mt-1">
+                                                 No {stockType.toLowerCase()} variations found for this item type. You can add a custom variation.
+                                             </p>
+                                         )}
                                     </div>
 
                                     {/* Manual Variation Input */}
