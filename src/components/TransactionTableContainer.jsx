@@ -49,8 +49,8 @@ function TransactionTableContainer({ initialTransactionType }) {
   const [wholesalePageTransactions, setWholesalePageTransactions] = useState([]);
 
   // AWS Configuration
-  const REGION = "us-east-1";
-  const IDENTITY_POOL_ID = "us-east-1:e6bcc9cf-e0f5-4d5a-a530-1766da1767f9";
+  const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+  const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID || "us-east-1:e6bcc9cf-e0f5-4d5a-a530-1766da1767f9";
 
   // Check authentication status
   const checkAuthStatus = useCallback(async () => {

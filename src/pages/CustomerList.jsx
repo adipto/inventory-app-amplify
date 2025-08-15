@@ -38,13 +38,13 @@ function CustomerList() {
             } else {
                 setIsAuthenticated(false);
                 // Redirect to login page
-                window.location.href = "http://localhost:5173";
+                window.location.href = import.meta.env.VITE_REDIRECT_URI || "http://localhost:5173";
             }
         } catch (error) {
             console.error("Authentication check failed:", error);
             setIsAuthenticated(false);
-            // Redirect to login page
-            window.location.href = "http://localhost:5173";
+                            // Redirect to login page
+                window.location.href = import.meta.env.VITE_REDIRECT_URI || "http://localhost:5173";
         } finally {
             setIsLoading(false);
         }

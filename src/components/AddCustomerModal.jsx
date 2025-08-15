@@ -12,8 +12,8 @@ import {
     fromCognitoIdentityPool,
 } from "@aws-sdk/credential-provider-cognito-identity";
 
-const REGION = "us-east-1";
-const IDENTITY_POOL_ID = "us-east-1:e6bcc9cf-e0f5-4d5a-a530-1766da1767f9";
+const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID || "us-east-1:e6bcc9cf-e0f5-4d5a-a530-1766da1767f9";
 const TABLE_NAME = "Customer_Information";
 
 function AddCustomerModal({ isOpen, onClose, editingCustomer, refreshCustomers, userToken }) {
@@ -102,7 +102,7 @@ function AddCustomerModal({ isOpen, onClose, editingCustomer, refreshCustomers, 
             const credentials = fromCognitoIdentityPool({
                 identityPoolId: IDENTITY_POOL_ID,
                 logins: {
-                    "cognito-idp.us-east-1.amazonaws.com/us-east-1_szDQpWkvh": userToken,
+                    [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: userToken,
                 },
                 clientConfig: { region: REGION },
             });
@@ -143,7 +143,7 @@ function AddCustomerModal({ isOpen, onClose, editingCustomer, refreshCustomers, 
             if (error.name === 'UnauthorizedException' || error.message?.includes('token')) {
                 alert("Authentication error. Please log in again.");
                 // Optionally redirect to login
-                window.location.href = "http://localhost:5173";
+                window.location.href = import.meta.env.VITE_REDIRECT_URI || "http://localhost:5173";
             } else {
                 alert(`Failed to ${editingCustomer ? "update" : "save"} customer. Please try again.`);
             }

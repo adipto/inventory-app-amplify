@@ -23,10 +23,13 @@ export const initializeCapitalManagement = async (token) => {
     const existingRecord = await client.send(getCommand);
     
     if (!existingRecord.Item) {
+      // Default initial capital - can be modified in the database
+      const defaultInitialCapital = import.meta.env.VITE_DEFAULT_INITIAL_CAPITAL || "200000";
+      
       const initialRecord = {
         RecordId: { S: "MAIN_RECORD" },
-        TotalCapitalInvestment: { N: "200000" },
-        InitialCashInHand: { N: "200000" },
+        TotalCapitalInvestment: { N: defaultInitialCapital },
+        InitialCashInHand: { N: defaultInitialCapital },
         ValueOfCurrentStock: { N: "0" },
         CashInHand: { N: "0" },
         COGSForProductSold: { N: "0" },
@@ -72,6 +75,35 @@ export const getCapitalManagementData = async (token) => {
     return response.Item;
   } catch (error) {
     console.error("Error fetching capital management data:", error);
+    throw error;
+  }
+};
+
+// Get initial capital from database
+export const getInitialCapitalFromDB = async (token) => {
+  try {
+    const data = await getCapitalManagementData(token);
+    return parseFloat(data.InitialCashInHand?.N || import.meta.env.VITE_DEFAULT_INITIAL_CAPITAL || "200000");
+  } catch (error) {
+    console.error("Error getting initial capital from DB:", error);
+    // Fallback to default value if database read fails
+    return parseFloat(import.meta.env.VITE_DEFAULT_INITIAL_CAPITAL || "200000");
+  }
+};
+
+// Update initial capital in database
+export const updateInitialCapital = async (token, newInitialCapital) => {
+  try {
+    const updates = {
+      InitialCashInHand: { N: newInitialCapital.toString() },
+      TotalCapitalInvestment: { N: newInitialCapital.toString() }
+    };
+    
+    await updateCapitalManagementData(token, updates);
+    console.log(`Initial capital updated to: ${newInitialCapital}`);
+    return true;
+  } catch (error) {
+    console.error("Error updating initial capital:", error);
     throw error;
   }
 };

@@ -6,7 +6,8 @@ import {
   refreshCapitalManagement,
   updateAfterTransaction,
   updateAfterStockAddition,
-  updateCapitalManagementData
+  updateCapitalManagementData,
+  getInitialCapitalFromDB
 } from "../utils/capitalManagementService";
 import { 
   RefreshCw, 
@@ -20,6 +21,7 @@ import {
 
 function CapitalManagementTable() {
   const [capitalData, setCapitalData] = useState(null);
+  const [initialCapital, setInitialCapital] = useState(200000.00); // Default fallback
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -28,9 +30,6 @@ function CapitalManagementTable() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
-
-  // Fixed initial capital value
-  const INITIAL_CAPITAL = 200000.00;
 
   // Fetch capital management data
   const fetchCapitalData = async () => {
@@ -47,6 +46,10 @@ function CapitalManagementTable() {
 
       const data = await getCapitalManagementData(idToken);
       setCapitalData(data);
+      
+      // Get initial capital from database
+      const dbInitialCapital = await getInitialCapitalFromDB(idToken);
+      setInitialCapital(dbInitialCapital);
     } catch (err) {
       console.error("Error fetching capital data:", err);
       setError("Failed to load capital management data. Please try again.");
@@ -100,7 +103,7 @@ function CapitalManagementTable() {
 
   // Calculate dynamic total capital
   const calculateTotalCapital = (currentStockValue) => {
-    return currentStockValue > INITIAL_CAPITAL ? currentStockValue : INITIAL_CAPITAL;
+    return currentStockValue > initialCapital ? currentStockValue : initialCapital;
   };
 
   // Handle withdraw profit button click
@@ -237,7 +240,7 @@ function CapitalManagementTable() {
               <div>
                 <p className="text-sm font-medium text-purple-700">Initial Capital</p>
                 <p className="text-xl font-bold text-purple-900">
-                  TK {formatCurrency(INITIAL_CAPITAL)}
+                  TK {formatCurrency(initialCapital)}
                 </p>
               </div>
             </div>
