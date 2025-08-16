@@ -23,6 +23,28 @@ export const fetchStock = async (tableName, token) => {
             ? unitPrice * quantity
             : unitPrice * quantity * 500; // For wholesale: 1 packet = 500 pcs
 
+        // Debug logging
+        console.log(`Stock Item Debug - Table: ${tableName}`, {
+            itemType: item.ItemType?.S,
+            variationName: item.VariationName?.S,
+            quantity: quantity,
+            unitPrice: unitPrice,
+            totalValue: totalValue,
+            quantityField: quantityField,
+            isRetail: isRetail,
+            rawQuantity: item[quantityField]?.N,
+            rawUnitPrice: item.UnitPrice?.N
+        });
+        
+        // Additional detailed logging
+        console.log(`Stock Item Raw Data - Table: ${tableName}:`, JSON.stringify(item, null, 2));
+        console.log(`Stock Item Calculated Values - Table: ${tableName}:`, {
+            quantity: quantity,
+            unitPrice: unitPrice,
+            totalValue: totalValue,
+            calculation: isRetail ? `${unitPrice} * ${quantity}` : `${unitPrice} * ${quantity} * 500`
+        });
+
         return {
             id: `${item.ItemType?.S}-${item.VariationName?.S}`,
             itemType: item.ItemType?.S || "",
@@ -179,6 +201,32 @@ export const updateStockAfterTransaction = async ({
         ConditionExpression: `${quantityField} >= :q`,
         ExpressionAttributeValues: {
             ":q": { N: quantityToSubtract.toString() }
+        }
+    });
+
+    return client.send(command);
+};
+
+export const restoreStockAfterTransactionDeletion = async ({
+    tableName,
+    itemType,
+    variationName,
+    quantityToRestore,
+    token,
+}) => {
+    const client = await createDynamoDBClient(token);
+    const quantityField = tableName === "Retail_Stock" ? "Quantity_pcs" : "Quantity_packets";
+
+    // Use DynamoDB's SET with addition to restore stock
+    const command = new UpdateItemCommand({
+        TableName: tableName,
+        Key: {
+            ItemType: { S: itemType },
+            VariationName: { S: variationName }
+        },
+        UpdateExpression: `SET ${quantityField} = ${quantityField} + :q`,
+        ExpressionAttributeValues: {
+            ":q": { N: quantityToRestore.toString() }
         }
     });
 

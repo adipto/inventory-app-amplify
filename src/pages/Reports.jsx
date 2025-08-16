@@ -143,8 +143,8 @@ const SummaryStats = ({ data, isAllTime = false }) => {
     const profitMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0.0';
 
     const stats = [
-        { label: "Total Revenue", value: `$${totalRevenue.toLocaleString()}`, icon: DollarSign, color: "blue" },
-        { label: "Total Profit", value: `$${totalProfit.toLocaleString()}`, icon: TrendingUp, color: "green" },
+        { label: "Total Revenue", value: `TK ${totalRevenue.toLocaleString()}`, icon: DollarSign, color: "blue" },
+        { label: "Total Profit", value: `TK ${totalProfit.toLocaleString()}`, icon: TrendingUp, color: "green" },
         { label: "Units Sold", value: totalQuantity.toLocaleString(), icon: Package, color: "purple" },
         { label: "Profit Margin", value: `${profitMargin}%`, icon: Target, color: "orange" }
     ];
@@ -165,6 +165,195 @@ const SummaryStats = ({ data, isAllTime = false }) => {
                     </div>
                 </div>
             ))}
+        </div>
+    );
+};
+
+// Top Customer Component
+const TopCustomerComponent = () => {
+    const [topCustomers, setTopCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchTopCustomers = async () => {
+            try {
+                setLoading(true);
+                const session = await fetchAuthSession();
+                const idToken = session.tokens?.idToken?.toString();
+                
+                if (idToken) {
+                    // Import DynamoDB client and commands
+                    const { DynamoDBClient, ScanCommand } = await import("@aws-sdk/client-dynamodb");
+                    const { fromCognitoIdentityPool } = await import("@aws-sdk/credential-provider-cognito-identity");
+                    const { unmarshall } = await import("@aws-sdk/util-dynamodb");
+
+                    const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+                    const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID;
+
+                    const credentials = fromCognitoIdentityPool({
+                        identityPoolId: IDENTITY_POOL_ID,
+                        logins: {
+                            [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: idToken,
+                        },
+                        clientConfig: { region: REGION },
+                    });
+
+                    const client = new DynamoDBClient({
+                        region: REGION,
+                        credentials,
+                    });
+
+                    // Fetch transactions from both retail and wholesale tables
+                    const [retailResponse, wholesaleResponse] = await Promise.all([
+                        client.send(new ScanCommand({ TableName: "Transaction_Retail" })),
+                        client.send(new ScanCommand({ TableName: "Transaction_Wholesale" }))
+                    ]);
+
+                    // Fetch customer details
+                    const customerResponse = await client.send(new ScanCommand({ TableName: "Customer_Information" }));
+                    const customers = customerResponse.Items.map(item => unmarshall(item));
+                    const customerMap = {};
+                    customers.forEach(customer => {
+                        customerMap[customer.CustomerID] = customer;
+                    });
+
+                    // Process retail transactions
+                    const retailTransactions = retailResponse.Items.map(item => unmarshall(item));
+                    const wholesaleTransactions = wholesaleResponse.Items.map(item => unmarshall(item));
+
+                    // Combine all transactions
+                    const allTransactions = [
+                        ...retailTransactions.map(tx => ({ ...tx, type: 'retail' })),
+                        ...wholesaleTransactions.map(tx => ({ ...tx, type: 'wholesale' }))
+                    ];
+
+                    // Calculate customer totals
+                    const customerTotals = {};
+                    allTransactions.forEach(tx => {
+                        const customerId = tx.CustomerID;
+                        if (!customerTotals[customerId]) {
+                            customerTotals[customerId] = {
+                                customerId,
+                                totalRevenue: 0,
+                                totalTransactions: 0,
+                                retailTransactions: 0,
+                                wholesaleTransactions: 0,
+                                lastTransactionDate: null,
+                                customerDetails: customerMap[customerId]
+                            };
+                        }
+
+                        // Calculate revenue based on transaction type
+                        let revenue = 0;
+                        if (tx.type === 'retail') {
+                            revenue = (parseFloat(tx.Quantity_Pcs) || 0) * (parseFloat(tx.SellingPrice_Per_Pc) || 0);
+                            customerTotals[customerId].retailTransactions++;
+                        } else {
+                            revenue = (parseFloat(tx.Quantity_Packets) || 0) * (parseFloat(tx.SellingPrice_Per_Packet) || 0);
+                            customerTotals[customerId].wholesaleTransactions++;
+                        }
+
+                        customerTotals[customerId].totalRevenue += revenue;
+                        customerTotals[customerId].totalTransactions++;
+
+                        // Track last transaction date
+                        if (tx.Date) {
+                            const txDate = new Date(tx.Date);
+                            if (!customerTotals[customerId].lastTransactionDate || txDate > new Date(customerTotals[customerId].lastTransactionDate)) {
+                                customerTotals[customerId].lastTransactionDate = tx.Date;
+                            }
+                        }
+                    });
+
+                    // Convert to array and sort by total revenue
+                    const topCustomersList = Object.values(customerTotals)
+                        .filter(customer => customer.customerDetails) // Only include customers with details
+                        .sort((a, b) => b.totalRevenue - a.totalRevenue)
+                        .slice(0, 5); // Top 5 customers
+
+                    setTopCustomers(topCustomersList);
+                }
+            } catch (error) {
+                console.error('Error fetching top customers:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTopCustomers();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-purple-50 rounded-lg">
+                        <Users className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">Top Customers</h2>
+                </div>
+                <div className="flex items-center justify-center h-32">
+                    <div className="text-gray-500">Loading top customers...</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-purple-50 rounded-lg">
+                    <Users className="w-5 h-5 text-purple-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-800">Top Customers</h2>
+            </div>
+            
+            {topCustomers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No customer data available</p>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {topCustomers.map((customer, index) => (
+                        <div key={customer.customerId} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-full">
+                                    <span className="text-lg font-bold text-purple-600">
+                                        {index + 1}
+                                    </span>
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-gray-900">
+                                        {customer.customerDetails?.Name || 'Unknown Customer'}
+                                    </h3>
+                                    <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                                        <span>ID: {customer.customerId}</span>
+                                        <span>Type: {customer.customerDetails?.CustomerType || 'N/A'}</span>
+                                        <span>Phone: {customer.customerDetails?.PhoneNumber || 'N/A'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-lg font-bold text-purple-600">
+                                    TK {customer.totalRevenue.toLocaleString()}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    {customer.totalTransactions} transactions
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                    {customer.retailTransactions} retail, {customer.wholesaleTransactions} wholesale
+                                </div>
+                                {customer.lastTransactionDate && (
+                                    <div className="text-xs text-gray-500">
+                                        Last: {new Date(customer.lastTransactionDate).toLocaleDateString()}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
@@ -335,7 +524,7 @@ function EnhancedReportsPage() {
         <div className="flex h-screen bg-gray-50">
             <Sidebar />
             <div className="flex-1 overflow-auto">
-                <PageHeader />
+                <PageHeader title="Reports" />
                 <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
                     <div className="max-w-7xl mx-auto p-6">
                         {/* Header */}
@@ -392,17 +581,108 @@ function EnhancedReportsPage() {
                             <SummaryStats data={yearOnlySummary} />
                             </div>
 
+                            {/* Monthly Profit Histogram - NEW SECTION */}
+                            <div className="mb-6">
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="p-2 bg-green-50 rounded-lg">
+                                            <TrendingUp className="w-5 h-5 text-green-600" />
+                                        </div>
+                                        <h2 className="text-xl font-semibold text-gray-800">Monthly Profit Overview - {selectedYearOnly}</h2>
+                                    </div>
+                                    
+                                    {yearOnlySummary.length > 0 ? (
+                                        <div className="space-y-4">
+                                            {/* Monthly Profit Bars */}
+                                            <div className="grid grid-cols-12 gap-2 mb-6">
+                                                {yearOnlySummary.map((monthData, index) => {
+                                                    const monthName = monthData.month;
+                                                    const profit = monthData.profit || 0;
+                                                    const revenue = monthData.revenue || 0;
+                                                    const profitMargin = revenue > 0 ? ((profit / revenue) * 100) : 0;
+                                                    
+                                                    // Find max profit for scaling
+                                                    const maxProfit = Math.max(...yearOnlySummary.map(m => m.profit || 0), 1);
+                                                    const barHeight = maxProfit > 0 ? (profit / maxProfit) * 200 : 0;
+                                                    
+                                                    return (
+                                                        <div key={index} className="flex flex-col items-center">
+                                                            {/* Profit Bar */}
+                                                            <div className="w-full bg-gray-200 rounded-t-sm" style={{ height: '200px', position: 'relative' }}>
+                                                                <div 
+                                                                    className="w-full bg-green-500 rounded-t-sm transition-all duration-300 hover:bg-green-600"
+                                                                    style={{ height: `${barHeight}px` }}
+                                                                    title={`${monthName}: TK ${profit.toLocaleString()} (${profitMargin.toFixed(1)}% margin)`}
+                                                                ></div>
+                                                            </div>
+                                                            
+                                            {/* Month Label */}
+                                            <div className="text-xs text-gray-600 mt-2 text-center font-medium">
+                                                {monthName}
+                                            </div>
+                                            
+                                            {/* Profit Amount */}
+                                            <div className="text-xs font-semibold text-green-600 text-center">
+                                                TK {profit.toLocaleString()}
+                                            </div>
+                                            
+                                            {/* Profit Margin */}
+                                            <div className="text-xs text-gray-500 text-center">
+                                                {profitMargin.toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                             
-                            {/* Date Selector - Only show when not in all-time mode */}
-                            {!isAllTime && (
-                                <DateSelector
-                                    selectedMonth={selectedMonth}
-                                    selectedYear={selectedYear}
-                                    onMonthChange={handleMonthChange}
-                                    onYearChange={handleYearChange}
-                                />
-                            )}
+                            {/* Summary Stats */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-green-600">
+                                        TK {yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0).toLocaleString()}
+                                    </div>
+                                    <div className="text-sm text-gray-600">Total Annual Profit</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-blue-600">
+                                        TK {Math.round(yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0) / 12).toLocaleString()}
+                                    </div>
+                                    <div className="text-sm text-gray-600">Average Monthly Profit</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-purple-600">
+                                        {(() => {
+                                            const totalRevenue = yearOnlySummary.reduce((sum, month) => sum + (month.revenue || 0), 0);
+                                            const totalProfit = yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0);
+                                            return totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0.0';
+                                        })()}%
+                                    </div>
+                                    <div className="text-sm text-gray-600">Annual Profit Margin</div>
+                                </div>
+                            </div>
                         </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-500">
+                            <TrendingUp className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                            <p>No monthly data available for {selectedYearOnly}</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Top Customer Component - Moved here above the Date Selector */}
+            <TopCustomerComponent />
+
+            {/* Date Selector - Only show when not in all-time mode */}
+            {!isAllTime && (
+                <DateSelector
+                    selectedMonth={selectedMonth}
+                    selectedYear={selectedYear}
+                    onMonthChange={handleMonthChange}
+                    onYearChange={handleYearChange}
+                />
+            )}
+        </div>
 
                         {dataLoading ? (
                             <div className="flex items-center justify-center h-64">
@@ -435,8 +715,8 @@ function EnhancedReportsPage() {
                                                     fontSize={12}
                                                     tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                 />
-                                                <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }} />
-                                                <Tooltip content={<CustomTooltip prefix="$" />} />
+                                                <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Revenue (TK)', angle: -90, position: 'insideLeft' }} />
+                                                <Tooltip content={<CustomTooltip prefix="TK " />} />
                                                 <Legend />
                                                 <Area
                                                     type="monotone"
@@ -464,8 +744,8 @@ function EnhancedReportsPage() {
                                             <BarChart data={monthlySummary} barGap={10}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                                                 <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                                                <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Amount ($)', angle: -90, position: 'insideLeft' }} />
-                                                <Tooltip content={<CustomTooltip prefix="$" />} />
+                                                <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Amount (TK)', angle: -90, position: 'insideLeft' }} />
+                                                <Tooltip content={<CustomTooltip prefix="TK " />} />
                                                 <Legend />
                                                 <Bar dataKey="revenue" fill="#3B82F6" name="Revenue" radius={[4, 4, 0, 0]} />
                                                 <Bar dataKey="profit" fill="#10B981" name="Net Profit" radius={[4, 4, 0, 0]} />
@@ -572,7 +852,7 @@ function EnhancedReportsPage() {
                                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                                         ))}
                                                     </Pie>
-                                                    <Tooltip content={<CustomTooltip prefix="$" />} />
+                                                    <Tooltip content={<CustomTooltip prefix="TK " />} />
                                                     <Legend />
                                                 </PieChart>
                                             </ResponsiveContainer>
@@ -598,7 +878,7 @@ function EnhancedReportsPage() {
                                                             <Cell key={`cell-${index}`} fill={GRADIENT_COLORS[index]?.start || COLORS[index]} />
                                                         ))}
                                                     </Pie>
-                                                    <Tooltip content={<CustomTooltip prefix="$" />} />
+                                                    <Tooltip content={<CustomTooltip prefix="TK " />} />
                                                     <Legend />
                                                 </PieChart>
                                             </ResponsiveContainer>
@@ -613,10 +893,9 @@ function EnhancedReportsPage() {
                                                       stroke="#64748b"
                                                       fontSize={12}
                                                       tickMargin={10}
-                                                      label={{ value: 'Product Type', position: 'insideBottom', offset: 20 }}
                                                     />
-                                                    <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Revenue ($)', angle: -90, position: 'insideLeft' }} />
-                                                    <Tooltip content={<CustomTooltip prefix="$" />} />
+                                                    <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Revenue (TK)', angle: -90, position: 'insideLeft', dy: 20, style: { fontSize: '12px', fontWeight: 'normal' } }} />
+                                                    <Tooltip content={<CustomTooltip prefix="TK " />} />
                                                     <Legend verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: 16 }} />
                                                     <Bar dataKey="retail" fill="#3B82F6" name="Retail" radius={[4, 4, 0, 0]} />
                                                     <Bar dataKey="wholesale" fill="#10B981" name="Wholesale" radius={[4, 4, 0, 0]} />

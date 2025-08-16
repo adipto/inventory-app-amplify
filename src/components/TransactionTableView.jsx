@@ -122,6 +122,9 @@ function TransactionTableView({
               Selling Price
             </th>
             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Total Amount
+            </th>
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               COGS
             </th>
             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -175,6 +178,9 @@ function TransactionTableView({
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                   {formatCurrency(transaction.sellingPrice)}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  {formatCurrency(transaction.quantity * transaction.sellingPrice)}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                   {formatCurrency(transaction.cogs)}
@@ -283,6 +289,12 @@ function TransactionTableView({
                   </span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-700">Total Amount:</span>
+                  <span className="text-sm font-semibold text-blue-900">
+                    ${formatCurrency(transaction.quantity * transaction.sellingPrice)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-sm font-medium text-gray-700">COGS:</span>
                   <span className="text-sm text-gray-900">
                     ${formatCurrency(transaction.cogs)}
@@ -329,30 +341,30 @@ function TransactionTableView({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onTransactionTypeChange("all")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               transactionType === "all"
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-blue-600 text-white shadow-md font-semibold"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
             }`}
           >
-            All Transactions
+            All
           </button>
           <button
             onClick={() => onTransactionTypeChange("retail")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               transactionType === "retail"
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-blue-600 text-white shadow-md font-semibold"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
             }`}
           >
             Retail
           </button>
           <button
             onClick={() => onTransactionTypeChange("wholesale")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               transactionType === "wholesale"
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-blue-600 text-white shadow-md font-semibold"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
             }`}
           >
             Wholesale

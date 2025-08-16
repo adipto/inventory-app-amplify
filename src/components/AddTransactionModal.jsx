@@ -198,9 +198,23 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
                 "Folio paper": "Folio Paper"
             };
 
-            const filteredVariations = items.filter(item =>
-                item.ItemType === categoryMap[productCategory]
-            );
+            // Filter variations by category AND stock quantity > 0
+            const filteredVariations = items.filter(item => {
+                // Check if item matches the selected category
+                const matchesCategory = item.ItemType === categoryMap[productCategory];
+                
+                if (!matchesCategory) return false;
+                
+                // Check if stock quantity is greater than 0
+                let stockQuantity = 0;
+                if (productType === "Retail") {
+                    stockQuantity = parseInt(item.Quantity_pcs) || 0;
+                } else {
+                    stockQuantity = parseInt(item.Quantity_packets) || 0;
+                }
+                
+                return stockQuantity > 0;
+            });
 
             setAvailableVariations(filteredVariations);
         } catch (error) {
@@ -259,6 +273,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         setProductVariation("");
         setCogs("");
         setNetProfit("");
+        setAvailableVariations([]);
     };
 
     const handleProductVariationChange = (e) => {
@@ -323,15 +338,63 @@ const handleSubmit = async (e) => {
         return;
     }
 
+    if (availableVariations.length === 0) {
+        alert("No stock available for the selected product type and category. Please add stock first.");
+        return;
+    }
+
     if (!quantity || !sellingPrice) {
         alert("Please fill in all required fields");
         return;
+    }
+
+    // Validate that Selling Price (per packet) is not smaller than COGS (per pc) * 500 for wholesale
+    if (productType === "Wholesale") {
+        const cogsPerPc = parseFloat(cogs);
+        const sellingPricePerPacket = parseFloat(sellingPrice);
+        const minimumSellingPrice = cogsPerPc * 500;
+        
+        if (sellingPricePerPacket < minimumSellingPrice) {
+            alert(`Selling Price (per packet) must be at least TK ${minimumSellingPrice.toFixed(2)} (COGS per pc × 500). Current value: TK ${sellingPricePerPacket.toFixed(2)}`);
+            return;
+        }
+    }
+
+    // Validate that Selling Price (per piece) is not smaller than COGS (per pc) for retail
+    if (productType === "Retail") {
+        const cogsPerPc = parseFloat(cogs);
+        const sellingPricePerPc = parseFloat(sellingPrice);
+        
+        if (sellingPricePerPc < cogsPerPc) {
+            alert(`Selling Price (per piece) must be at least TK ${cogsPerPc.toFixed(2)} (COGS per pc). Current value: TK ${sellingPricePerPc.toFixed(2)}`);
+            return;
+        }
     }
 
     setIsSubmitting(true);
 
     try {
         const dynamoClient = await createDynamoDBClient();
+
+        // --- VALIDATE STOCK AVAILABILITY FIRST ---
+        const session = await fetchAuthSession();
+        const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+        const stockTable = productType === "Retail" ? RETAIL_STOCK_TABLE : WHOLESALE_STOCK_TABLE;
+        const quantityToSubtract = parseInt(quantity, 10);
+        
+        // Validate stock availability before creating transaction
+        try {
+            await updateStockAfterTransaction({
+                tableName: stockTable,
+                itemType: productCategory,
+                variationName: productVariation,
+                quantityToSubtract,
+                token: idToken,
+            });
+        } catch (stockError) {
+            // If stock validation fails, don't create the transaction
+            throw stockError;
+        }
 
         // Use existing transaction ID for edit mode, generate new for add mode
         const transactionId = isEditMode ? transaction.TransactionID : generateTransactionId();
@@ -391,6 +454,7 @@ const handleSubmit = async (e) => {
             transactionData.SellingPrice_Per_Packet = { N: sellingPrice.toString() };
         }
 
+        // --- CREATE TRANSACTION AFTER STOCK VALIDATION ---
         await dynamoClient.send(
             new PutItemCommand({
                 TableName: tableName,
@@ -398,28 +462,26 @@ const handleSubmit = async (e) => {
             })
         );
 
-        // --- Update Stock After Transaction ---
-        const session = await fetchAuthSession();
-        const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
-        const stockTable = productType === "Retail" ? RETAIL_STOCK_TABLE : WHOLESALE_STOCK_TABLE;
-        const quantityToSubtract = parseInt(quantity, 10);
-        
-        try {
-            await updateStockAfterTransaction({
-                tableName: stockTable,
-                itemType: productCategory,
-                variationName: productVariation,
-                quantityToSubtract,
-                token: idToken,
-            });
-        } catch (stockError) {
-            throw stockError;
-        }
-
         // --- Update Capital Management After Transaction ---
         try {
             const { updateAfterTransaction } = await import("../utils/capitalManagementService");
-            await updateAfterTransaction(idToken);
+            
+            // Calculate the total transaction amount (selling price × quantity)
+            const quantityNum = parseFloat(quantity);
+            const sellingPriceNum = parseFloat(sellingPrice);
+            const transactionAmount = quantityNum * sellingPriceNum;
+            
+            // Get the net profit amount from the form
+            const netProfitAmount = parseFloat(netProfit);
+            
+            console.log('Transaction Amount Calculation:', {
+                quantity: quantityNum,
+                sellingPrice: sellingPriceNum,
+                transactionAmount: transactionAmount,
+                netProfitAmount: netProfitAmount
+            });
+            
+            await updateAfterTransaction(idToken, transactionAmount, netProfitAmount);
         } catch (capitalError) {
             console.error("Error updating capital management:", capitalError);
         }
@@ -600,19 +662,40 @@ const handleSubmit = async (e) => {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
                                             Product Variation <span className="text-red-500">*</span>
+                                            {availableVariations.length > 0 && (
+                                                <span className="text-xs text-gray-500 ml-2">
+                                                    ({availableVariations.length} available)
+                                                </span>
+                                            )}
                                         </label>
                                         <select
                                             value={productVariation}
                                             onChange={handleProductVariationChange}
                                             className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            disabled={availableVariations.length === 0}
                                         >
-                                            <option value="">Select Variation</option>
-                                            {availableVariations.map((variation) => (
-                                                <option key={variation.VariationName} value={variation.VariationName}>
-                                                    {variation.VariationName}
-                                                </option>
-                                            ))}
+                                            <option value="">
+                                                {availableVariations.length === 0 
+                                                    ? "No variations with stock available" 
+                                                    : "Select Variation"
+                                                }
+                                            </option>
+                                            {availableVariations.map((variation) => {
+                                                const stockQuantity = productType === "Retail" 
+                                                    ? variation.Quantity_pcs || 0
+                                                    : variation.Quantity_packets || 0;
+                                                return (
+                                                    <option key={variation.VariationName} value={variation.VariationName}>
+                                                        {variation.VariationName} (Stock: {stockQuantity})
+                                                    </option>
+                                                );
+                                            })}
                                         </select>
+                                        {availableVariations.length === 0 && (
+                                            <p className="mt-1 text-sm text-orange-600">
+                                                No stock available for this product type and category. Please add stock first.
+                                            </p>
+                                        )}
                                     </div>
 
                                     {/* Quantity */}
@@ -638,12 +721,37 @@ const handleSubmit = async (e) => {
                                         <input
                                             type="number"
                                             value={sellingPrice}
-                                            min="0"
+                                            min={productType === "Wholesale" && cogs ? parseFloat(cogs) * 500 : 0}
                                             step="0.01"
                                             onChange={(e) => setSellingPrice(e.target.value)}
                                             placeholder={productType === "Retail" ? "Price per piece" : "Price per packet"}
-                                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                                 (productType === "Wholesale" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * 500) ||
+                                                 (productType === "Retail" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs))
+                                                     ? 'border-red-500 focus:ring-red-500' 
+                                                     : ''
+                                             }`}
                                         />
+                                        {productType === "Wholesale" && cogs && (
+                                            <p className="mt-1 text-sm text-gray-600">
+                                                Minimum price: TK {(parseFloat(cogs) * 500).toFixed(2)} (COGS per pc × 500)
+                                            </p>
+                                        )}
+                                        {productType === "Retail" && cogs && (
+                                            <p className="mt-1 text-sm text-gray-600">
+                                                Minimum price: TK {parseFloat(cogs).toFixed(2)} (COGS per pc)
+                                            </p>
+                                        )}
+                                                                                 {productType === "Wholesale" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * 500 && (
+                                             <p className="mt-1 text-sm text-red-600">
+                                                 ⚠️ Selling price must be at least TK {(parseFloat(cogs) * 500).toFixed(2)}
+                                             </p>
+                                         )}
+                                         {productType === "Retail" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) && (
+                                             <p className="mt-1 text-sm text-red-600">
+                                                 ⚠️ Selling price must be at least TK {parseFloat(cogs).toFixed(2)}
+                                             </p>
+                                         )}
                                     </div>
 
                                     {/* COGS (auto-filled) */}
@@ -676,11 +784,12 @@ const handleSubmit = async (e) => {
                                     <div className="mt-2">
                                         <button
                                             type="submit"
-                                            disabled={isSubmitting}
+                                            disabled={isSubmitting || availableVariations.length === 0}
                                             className={`w-full flex items-center justify-center px-4 py-2 text-white rounded-lg transition focus:outline-none focus:ring-2 disabled:opacity-70 ${isEditMode
                                                 ? "bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-500"
                                                 : "bg-green-500 hover:bg-green-600 focus:ring-green-500"
                                                 }`}
+                                            title={availableVariations.length === 0 ? "No stock available for the selected product type and category" : ""}
                                         >
                                             {isSubmitting ? (
                                                 <span className="flex items-center">

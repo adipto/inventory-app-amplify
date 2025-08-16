@@ -15,7 +15,7 @@ import DeleteConfirmModal from "../utils/DeleteConfirmModal";
 import AddTransactionModal from "./AddTransactionModal";
 import TransactionTableView from "./TransactionTableView";
 
-function TransactionTableContainer({ initialTransactionType }) {
+function TransactionTableContainer({ initialTransactionType, onTransactionTypeChange }) {
   // Authentication state
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -315,11 +315,36 @@ const getFilteredTransactions = useCallback(() => {
     setIsDeleting(true);
     try {
       const client = await createDynamoDBClient();
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
 
       // Determine which table to delete from based on transaction type
       const tableName = transactionToDelete.type === "retail"
         ? "Transaction_Retail"
         : "Transaction_Wholesale";
+
+      // --- RESTORE STOCK BEFORE DELETING TRANSACTION ---
+      try {
+        const { restoreStockAfterTransactionDeletion } = await import("../utils/stockService");
+        
+        // Determine stock table and quantity field
+        const stockTable = transactionToDelete.type === "retail" ? "Retail_Stock" : "Wholesale_Stock";
+        const quantityToRestore = transactionToDelete.type === "retail" 
+          ? transactionToDelete.Quantity_Pcs 
+          : transactionToDelete.Quantity_Packets;
+
+        // Restore stock
+        await restoreStockAfterTransactionDeletion({
+          tableName: stockTable,
+          itemType: transactionToDelete.ProductName,
+          variationName: transactionToDelete.ProductVariation,
+          quantityToRestore: quantityToRestore,
+          token: idToken,
+        });
+      } catch (stockError) {
+        console.error("Error restoring stock:", stockError);
+        // Continue with deletion even if stock restoration fails
+      }
 
       // Delete the item from DynamoDB
       await client.send(
@@ -330,6 +355,29 @@ const getFilteredTransactions = useCallback(() => {
           },
         })
       );
+
+      // Update capital management after transaction deletion
+      try {
+        const { updateAfterTransaction } = await import("../utils/capitalManagementService");
+        
+        // Calculate the transaction amount and net profit that should be reversed
+        const quantityNum = parseFloat(transactionToDelete.quantity);
+        const sellingPriceNum = parseFloat(transactionToDelete.sellingPrice);
+        const transactionAmount = quantityNum * sellingPriceNum;
+        const netProfitAmount = parseFloat(transactionToDelete.NetProfit);
+        
+        console.log('Transaction Deletion - Reversing amounts:', {
+          quantity: quantityNum,
+          sellingPrice: sellingPriceNum,
+          transactionAmount: transactionAmount,
+          netProfitAmount: netProfitAmount
+        });
+        
+        // Pass negative values to reverse the transaction
+        await updateAfterTransaction(idToken, -transactionAmount, -netProfitAmount);
+      } catch (capitalError) {
+        console.error("Error updating capital management:", capitalError);
+      }
 
       // Close modal and refresh data
       setIsDeleteModalOpen(false);
@@ -403,7 +451,13 @@ const getFilteredTransactions = useCallback(() => {
     await fetchData();
   };
 
-  const handleTransactionTypeChange = (type) => setTransactionType(type);
+  const handleTransactionTypeChange = (type) => {
+    setTransactionType(type);
+    // Also update the parent component's filter state for header synchronization
+    if (onTransactionTypeChange) {
+      onTransactionTypeChange(type);
+    }
+  };
 
   const handleNewTransactionClick = async () => {
     if (!isAuthenticated) {

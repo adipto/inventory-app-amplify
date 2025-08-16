@@ -111,11 +111,10 @@ function Sidebar() {
         <ul className="space-y-1 px-2">
           {bottomNavItems.map((item) => (
             <li key={item.path}>
-              <Link
-                to={item.path}
+              <div
                 className={`
-                  flex items-center p-3 rounded-lg transition-colors
-                  text-gray-400 hover:bg-gray-800 hover:text-white
+                  flex items-center p-3 rounded-lg
+                  text-gray-500 cursor-not-allowed
                   ${isCollapsed ? "justify-center" : ""}
                 `}
                 title={isCollapsed ? item.name : ""}
@@ -124,7 +123,7 @@ function Sidebar() {
                 {!isCollapsed && (
                   <span className="ml-3">{item.name}</span>
                 )}
-              </Link>
+              </div>
             </li>
           ))}
         </ul>

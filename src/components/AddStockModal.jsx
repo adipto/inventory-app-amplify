@@ -181,6 +181,18 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Validate required fields before proceeding
+        if (!variation || (isCustomVariation && !customVariation.trim())) {
+            alert("Please select or enter a variation name");
+            return;
+        }
+        
+        if (!quantity || quantity <= 0) {
+            alert("Please enter a valid quantity");
+            return;
+        }
+        
         setIsLoading(true);
 
         try {

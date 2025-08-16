@@ -60,6 +60,11 @@ function CustomerList() {
     const handleWholesaleClick = () => setActiveFilter("wholesale");
     const handleResetFilter = () => setActiveFilter("all");
 
+    // New unified filter change handler for two-way synchronization
+    const handleFilterChange = (filter) => {
+        setActiveFilter(filter);
+    };
+
     const fetchCustomersPage = async (page = 1, limit = itemsPerPage) => {
         if (!userToken) return;
         setDataLoading(true);
@@ -195,6 +200,8 @@ function CustomerList() {
                     title="Customers List"
                     onRetailClick={handleRetailClick}
                     onWholesaleClick={handleWholesaleClick}
+                    activeFilter={activeFilter}
+                    onFilterChange={handleFilterChange}
                 />
 
                 <main className="p-3 sm:p-6 max-w-7xl mx-auto">

@@ -4,7 +4,7 @@ import { useAuthenticator } from "@aws-amplify/ui-react";
 import { signInWithRedirect, signOut, fetchAuthSession } from "aws-amplify/auth";
 import { ShoppingBag, Package, LogOut, User, List } from "lucide-react";
 
-function PageHeader({ title, onAllClick, onRetailClick, onWholesaleClick }) {
+function PageHeader({ title, onAllClick, onRetailClick, onWholesaleClick, activeFilter, onFilterChange }) {
     const { user } = useAuthenticator((context) => [context.user]);
     const [userEmail, setUserEmail] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -59,36 +59,71 @@ function PageHeader({ title, onAllClick, onRetailClick, onWholesaleClick }) {
             : "text-gray-700 hover:bg-white hover:shadow-sm"
         }`;
 
+    // Enhanced filter handlers that support both legacy and new callback patterns
+    const handleAllClick = () => {
+        if (onFilterChange) {
+            onFilterChange("all");
+        } else if (onAllClick) {
+            onAllClick();
+        }
+    };
+
+    const handleRetailClick = () => {
+        if (onFilterChange) {
+            onFilterChange("retail");
+        } else if (onRetailClick) {
+            onRetailClick();
+        }
+    };
+
+    const handleWholesaleClick = () => {
+        if (onFilterChange) {
+            onFilterChange("wholesale");
+        } else if (onWholesaleClick) {
+            onWholesaleClick();
+        }
+    };
+
+    // Determine if this page needs filter tabs
+    const needsFilters = onAllClick || onRetailClick || onWholesaleClick || onFilterChange || activeFilter;
+
+    // Determine active state based on activeFilter prop or title matching
+    const isAllActive = activeFilter ? activeFilter === "all" : title === "All Transactions" || title === "All Stock";
+    const isRetailActive = activeFilter ? activeFilter === "retail" : title === "Retail Transactions" || title === "Retail Stock";
+    const isWholesaleActive = activeFilter ? activeFilter === "wholesale" : title === "Wholesale Transactions" || title === "Wholesale Stock";
+
     return (
         <header className="bg-white border-b px-6 py-4">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
 
                 <div className="flex items-center space-x-6">
-                    {/* Tabs */}
-                    <div className="hidden md:flex bg-gray-100 p-1 rounded-lg">
-                        <button
-                            onClick={onAllClick}
-                            className={getButtonClass(title === "All Transactions")}
-                        >
-                            <List size={16} className="inline mr-1" />
-                            All
-                        </button>
-                        <button
-                            onClick={onRetailClick}
-                            className={getButtonClass(title === "Retail Transactions")}
-                        >
-                            <ShoppingBag size={16} className="inline mr-1" />
-                            Retail
-                        </button>
-                        <button
-                            onClick={onWholesaleClick}
-                            className={getButtonClass(title === "Wholesale Transactions")}
-                        >
-                            <Package size={16} className="inline mr-1" />
-                            Wholesale
-                        </button>
-                    </div>
+                    {/* Tabs - Only show if page needs filters */}
+                    {needsFilters && (
+                        <div className="hidden md:flex bg-gray-100 p-1 rounded-lg">
+                            <button
+                                onClick={handleAllClick}
+                                className={getButtonClass(isAllActive)}
+                            >
+                                <List size={16} className="inline mr-1" />
+                                All
+                            </button>
+                            <button
+                                onClick={handleRetailClick}
+                                className={getButtonClass(isRetailActive)}
+                            >
+                                <ShoppingBag size={16} className="inline mr-1" />
+                                Retail
+                            </button>
+                            <button
+                                onClick={handleWholesaleClick}
+                                className={getButtonClass(isWholesaleActive)}
+                            >
+                                <Package size={16} className="inline mr-1" />
+                                Wholesale
+                            </button>
+                        </div>
+                    )}
 
                     {/* Auth Section */}
                     {user ? (

@@ -21,6 +21,11 @@ function HomePage() {
     setTransactionType("all");
   };
 
+  // New unified filter change handler for two-way synchronization
+  const handleFilterChange = (filter) => {
+    setTransactionType(filter);
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -28,6 +33,8 @@ function HomePage() {
       <div className="flex-1 overflow-auto">
         <PageHeader
           title="Transaction History"
+          activeFilter={transactionType}
+          onFilterChange={handleFilterChange}
           onAllClick={handleAllTransactionsClick}
           onRetailClick={handleRetailClick}
           onWholesaleClick={handleWholesaleClick}
@@ -44,7 +51,10 @@ function HomePage() {
                   ? "Wholesale Transactions"
                   : "All Transactions"}
             </h2>
-            <TransactionTable initialTransactionType={transactionType} />
+            <TransactionTable 
+              initialTransactionType={transactionType} 
+              onTransactionTypeChange={handleFilterChange}
+            />
           </div>
 
 

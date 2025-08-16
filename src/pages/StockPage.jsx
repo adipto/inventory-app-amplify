@@ -194,6 +194,11 @@ function StockPage() {
   const handleRetailClick = () => setActiveTab("retail");
   const handleWholesaleClick = () => setActiveTab("wholesale");
 
+  // New unified filter change handler for two-way synchronization
+  const handleFilterChange = (filter) => {
+    setActiveTab(filter);
+  };
+
   // Get current stock based on active tab
   const currentStock =
     activeTab === "all"
@@ -380,6 +385,8 @@ const handleAllStockRefresh = async () => {
           onAllClick={handleAllClick}
           onRetailClick={handleRetailClick}
           onWholesaleClick={handleWholesaleClick}
+          activeFilter={activeTab}
+          onFilterChange={handleFilterChange}
         />
         <main className="p-6">
           {/* Header */}
@@ -413,7 +420,7 @@ const handleAllStockRefresh = async () => {
                 <div className="flex rounded-lg bg-gray-100 p-1">
                   <button
                     onClick={handleAllClick}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors TK {activeTab === "all"
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "all"
                       ? "bg-white text-blue-600 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                       }`}
@@ -422,7 +429,7 @@ const handleAllStockRefresh = async () => {
                   </button>
                   <button
                     onClick={handleRetailClick}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors TK {activeTab === "retail"
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "retail"
                       ? "bg-white text-blue-600 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                       }`}
@@ -431,7 +438,7 @@ const handleAllStockRefresh = async () => {
                   </button>
                   <button
                     onClick={handleWholesaleClick}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors TK {activeTab === "wholesale"
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === "wholesale"
                       ? "bg-white text-blue-600 shadow-sm"
                       : "text-gray-600 hover:text-gray-900"
                       }`}
@@ -539,6 +546,11 @@ const handleAllStockRefresh = async () => {
                             <ArrowUpDown size={14} className="text-gray-400" />
                           </div>
                         </th>
+                        {activeTab === "all" && (
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Stock Type
+                          </th>
+                        )}
                         <th
                           className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                           onClick={() => requestSort("quantity")}
@@ -578,6 +590,25 @@ const handleAllStockRefresh = async () => {
                               <td className="px-3 py-4 whitespace-nowrap">
                                 <div className="text-sm text-gray-900">{item.variationName}</div>
                               </td>
+                              {activeTab === "all" && (
+                                <td className="px-3 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      retailStock.some(retailItem => 
+                                        retailItem.itemType === item.itemType && 
+                                        retailItem.variationName === item.variationName
+                                      ) 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      {retailStock.some(retailItem => 
+                                        retailItem.itemType === item.itemType && 
+                                        retailItem.variationName === item.variationName
+                                      ) ? 'Retail' : 'Wholesale'}
+                                    </span>
+                                  </div>
+                                </td>
+                              )}
                               <td className="px-3 py-4 whitespace-nowrap">
                                 <div className="flex items-center space-x-2">
                                   <span className={`text-sm font-medium TK {isLowStock ? 'text-amber-600' : 'text-gray-900'}`}>
@@ -623,7 +654,7 @@ const handleAllStockRefresh = async () => {
                         })
                       ) : (
                         <tr>
-                          <td colSpan="6" className="px-6 py-12 text-center">
+                          <td colSpan={activeTab === "all" ? "7" : "6"} className="px-6 py-12 text-center">
                             <div className="flex flex-col items-center">
                               <Package size={48} className="text-gray-400 mb-4" />
                               <h3 className="text-lg font-medium text-gray-900 mb-2">No stock items found</h3>
@@ -703,6 +734,23 @@ const handleAllStockRefresh = async () => {
                               <div>
                                 <h3 className="font-medium text-gray-900">{item.itemType}</h3>
                                 <p className="text-sm text-gray-600">{item.variationName}</p>
+                                {activeTab === "all" && (
+                                  <div className="mt-1">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      retailStock.some(retailItem => 
+                                        retailItem.itemType === item.itemType && 
+                                        retailItem.variationName === item.variationName
+                                      ) 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      {retailStock.some(retailItem => 
+                                        retailItem.itemType === item.itemType && 
+                                        retailItem.variationName === item.variationName
+                                      ) ? 'Retail' : 'Wholesale'}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center space-x-2">
                                 <button

@@ -110,6 +110,32 @@ function AllStockEntriesTable({ onRefresh, loading: parentLoading }) {
             const session = await fetchAuthSession();
             const token = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
             
+            // --- Fetch Stock Transaction Details Before Deletion ---
+            const { fetchStockEntries } = await import("../utils/stockService");
+            const allEntries = await fetchStockEntries(token, 1, 1000, null); // Get all entries to check if this is the last one
+            
+            // Check if this is the last entry in the table
+            const isLastEntry = allEntries.entries.length === 1;
+            
+                         // Store the stock transaction details before deletion
+             const stockTransactionDetails = {
+                 quantityRemoved: deleteEntry.quantityPcs || deleteEntry.quantityPackets || deleteEntry.quantity,
+                 unitPrice: deleteEntry.unitPrice || deleteEntry.UnitPrice,
+                 stockValueRemoved: deleteEntry.totalValue || (deleteEntry.quantityPcs || deleteEntry.quantityPackets || deleteEntry.quantity) * (deleteEntry.unitPrice || deleteEntry.UnitPrice),
+                 isLastEntry: isLastEntry
+             };
+            
+                         console.log('Stock Transaction Details Before Deletion:', stockTransactionDetails);
+             console.log('Delete Entry Raw Data:', {
+                 deleteEntry: deleteEntry,
+                 totalValue: deleteEntry.totalValue,
+                 quantityPcs: deleteEntry.quantityPcs,
+                 quantityPackets: deleteEntry.quantityPackets,
+                 quantity: deleteEntry.quantity,
+                 unitPrice: deleteEntry.unitPrice,
+                 UnitPrice: deleteEntry.UnitPrice
+             });
+            
             // 1. Delete from Stock_Entries
             const entryDate = deleteEntry.date || deleteEntry.Date;
             const entrySortKey = deleteEntry.StockType_VariationName_Timestamp;
@@ -137,9 +163,26 @@ function AllStockEntriesTable({ onRefresh, loading: parentLoading }) {
                 tableName,
                 itemType: mainItemType,
                 variationName: mainVariationName,
-                quantityToDeduct: deleteEntry.quantityPcs || deleteEntry.quantityPackets || deleteEntry.quantity,
+                quantityToDeduct: stockTransactionDetails.quantityRemoved,
                 token
             });
+            
+                         // --- Update Capital Management After Stock Deletion ---
+             try {
+                 const { updateAfterStockDeletion } = await import("../utils/capitalManagementService");
+                 
+                 console.log('Calling updateAfterStockDeletion with:', {
+                     stockValueRemoved: stockTransactionDetails.stockValueRemoved,
+                     isLastEntry: stockTransactionDetails.isLastEntry
+                 });
+                 
+                 // Pass the stock transaction details for proper capital management update
+                 await updateAfterStockDeletion(token, stockTransactionDetails.stockValueRemoved, stockTransactionDetails.isLastEntry);
+                 
+                 console.log('Capital management update completed successfully');
+             } catch (capitalError) {
+                 console.error("Error updating capital management:", capitalError);
+             }
             
             setDeleteEntry(null);
             
