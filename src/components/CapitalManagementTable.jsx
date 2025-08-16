@@ -30,6 +30,8 @@ function CapitalManagementTable() {
   const [isTakingProfit, setIsTakingProfit] = useState(false);
   const [takeProfitTransactions, setTakeProfitTransactions] = useState([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [allTimeProfit, setAllTimeProfit] = useState(null);
+  const [isCalculatingAllTimeProfit, setIsCalculatingAllTimeProfit] = useState(false);
 
   // Fetch capital management data
   const fetchCapitalData = async () => {
@@ -134,6 +136,73 @@ function CapitalManagementTable() {
       setTakeProfitTransactions([]);
     } finally {
       setIsLoadingTransactions(false);
+    }
+  };
+
+  // Calculate all-time profit by scanning the entire Take_Profit_Transactions table
+  const calculateAllTimeProfit = async () => {
+    try {
+      setIsCalculatingAllTimeProfit(true);
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+
+      if (!idToken) {
+        alert("No authentication token available");
+        return;
+      }
+
+      // Import DynamoDB client and commands
+      const { DynamoDBClient, ScanCommand } = await import("@aws-sdk/client-dynamodb");
+      const { fromCognitoIdentityPool } = await import("@aws-sdk/credential-provider-cognito-identity");
+      const { unmarshall } = await import("@aws-sdk/util-dynamodb");
+
+      const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+      const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID;
+
+      const credentials = fromCognitoIdentityPool({
+        identityPoolId: IDENTITY_POOL_ID,
+        logins: {
+          [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: idToken,
+        },
+        clientConfig: { region: REGION },
+      });
+
+      const client = new DynamoDBClient({
+        region: REGION,
+        credentials,
+      });
+      
+      // Scan the entire Take_Profit_Transactions table
+      const scanCommand = new ScanCommand({
+        TableName: "Take_Profit_Transactions"
+      });
+      
+      const response = await client.send(scanCommand);
+      const allTransactions = response.Items.map(item => unmarshall(item));
+      
+      // Calculate total profit by summing all Amount fields
+      const totalProfit = allTransactions.reduce((sum, transaction) => {
+        const amount = parseFloat(transaction.Amount?.N || transaction.Amount || 0);
+        return sum + amount;
+      }, 0);
+      
+      setAllTimeProfit(totalProfit);
+      
+      // Also update the take profit transactions list if it's empty
+      if (takeProfitTransactions.length === 0) {
+        setTakeProfitTransactions(allTransactions);
+      }
+      
+      console.log("All-time profit calculation completed:", {
+        totalTransactions: allTransactions.length,
+        totalProfit: totalProfit
+      });
+      
+    } catch (error) {
+      console.error("Error calculating all-time profit:", error);
+      alert("Failed to calculate all-time profit: " + error.message);
+    } finally {
+      setIsCalculatingAllTimeProfit(false);
     }
   };
 
@@ -617,6 +686,55 @@ function CapitalManagementTable() {
               <RefreshCw size={16} className={`mr-2 ${isLoadingTransactions ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+          </div>
+          
+          {/* All-Time Profit Calculation Section */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-md font-semibold text-gray-800">All-Time Profit Calculation</h4>
+              <button
+                onClick={calculateAllTimeProfit}
+                disabled={isCalculatingAllTimeProfit}
+                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {isCalculatingAllTimeProfit ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Calculating...
+                  </>
+                ) : (
+                  <>
+                    <DollarSign size={16} className="mr-2" />
+                    Calculate All-Time Profit
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {allTimeProfit !== null && (
+              <div className="bg-white p-4 rounded-lg border border-green-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Total Profit Taken Out:</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      TK {allTimeProfit.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600 mb-1">Total Transactions:</p>
+                    <p className="text-lg font-semibold text-gray-800">
+                      {takeProfitTransactions.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {allTimeProfit === null && !isCalculatingAllTimeProfit && (
+              <p className="text-sm text-gray-600">
+                Click the button above to calculate the total profit taken out from all transactions.
+              </p>
+            )}
           </div>
           
           {isLoadingTransactions ? (
