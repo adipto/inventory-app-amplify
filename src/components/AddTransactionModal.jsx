@@ -195,7 +195,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
             const categoryMap = {
                 "Non-judicial stamp": "Non-judicial stamp",
                 "Cartridge Paper": "Cartridge Paper",
-                "Folio paper": "Folio Paper"
+                "Folio Paper": "Folio Paper"
             };
 
             // Filter variations by category AND stock quantity > 0
@@ -376,26 +376,6 @@ const handleSubmit = async (e) => {
     try {
         const dynamoClient = await createDynamoDBClient();
 
-        // --- VALIDATE STOCK AVAILABILITY FIRST ---
-        const session = await fetchAuthSession();
-        const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
-        const stockTable = productType === "Retail" ? RETAIL_STOCK_TABLE : WHOLESALE_STOCK_TABLE;
-        const quantityToSubtract = parseInt(quantity, 10);
-        
-        // Validate stock availability before creating transaction
-        try {
-            await updateStockAfterTransaction({
-                tableName: stockTable,
-                itemType: productCategory,
-                variationName: productVariation,
-                quantityToSubtract,
-                token: idToken,
-            });
-        } catch (stockError) {
-            // If stock validation fails, don't create the transaction
-            throw stockError;
-        }
-
         // Use existing transaction ID for edit mode, generate new for add mode
         const transactionId = isEditMode ? transaction.TransactionID : generateTransactionId();
 
@@ -454,7 +434,7 @@ const handleSubmit = async (e) => {
             transactionData.SellingPrice_Per_Packet = { N: sellingPrice.toString() };
         }
 
-        // --- CREATE TRANSACTION AFTER STOCK VALIDATION ---
+        // --- CREATE TRANSACTION FIRST ---
         await dynamoClient.send(
             new PutItemCommand({
                 TableName: tableName,
@@ -462,9 +442,33 @@ const handleSubmit = async (e) => {
             })
         );
 
+        // --- UPDATE STOCK AFTER TRANSACTION IS CREATED ---
+        try {
+            const session = await fetchAuthSession();
+            const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+            const stockTable = productType === "Retail" ? RETAIL_STOCK_TABLE : WHOLESALE_STOCK_TABLE;
+            const quantityToSubtract = parseInt(quantity, 10);
+            
+            await updateStockAfterTransaction({
+                tableName: stockTable,
+                itemType: productCategory,
+                variationName: productVariation,
+                quantityToSubtract,
+                token: idToken,
+            });
+        } catch (stockError) {
+            console.error("Error updating stock after transaction:", stockError);
+            // Don't throw error here as transaction was created successfully
+            // Stock update can be retried later if needed
+        }
+
         // --- Update Capital Management After Transaction ---
         try {
             const { updateAfterTransaction } = await import("../utils/capitalManagementService");
+            
+            // Get the auth token for capital management update
+            const session = await fetchAuthSession();
+            const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
             
             // Calculate the total transaction amount (selling price × quantity)
             const quantityNum = parseFloat(quantity);
@@ -654,7 +658,7 @@ const handleSubmit = async (e) => {
                                         >
                                             <option value="Non-judicial stamp">Non-judicial stamp</option>
                                             <option value="Cartridge Paper">Cartridge Paper</option>
-                                            <option value="Folio paper">Folio paper</option>
+                                            <option value="Folio Paper">Folio Paper</option>
                                         </select>
                                     </div>
 

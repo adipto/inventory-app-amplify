@@ -1,5 +1,5 @@
 // src/pages/StockPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { fetchAuthSession, signOut } from "aws-amplify/auth";
 import { Hub } from "aws-amplify/utils";
 import Sidebar from "../components/Sidebar";
@@ -35,6 +35,9 @@ function StockPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [stockEntries, setStockEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
+  
+  // Ref for AllStockEntriesTable to call its refresh method
+  const allStockEntriesTableRef = useRef();
 
   // Calculate total values
   const retailTotalValue = retailStock.reduce((sum, item) => sum + (item.totalValue || 0), 0);
@@ -871,6 +874,7 @@ const handleAllStockRefresh = async () => {
           {/* All Stock Entries Table */}
           <h2 className="text-xl font-semibold text-gray-900 mt-12 mb-4">All Stock Entries</h2>
           <AllStockEntriesTable
+  ref={allStockEntriesTableRef}
   entries={stockEntries}
   onRefresh={handleAllStockRefresh}
   loading={entriesLoading}
@@ -891,6 +895,10 @@ const handleAllStockRefresh = async () => {
     // This gets called when stock is actually added
     await fetchData();
     await fetchEntries();
+    // Force refresh of the stock entries table
+    if (allStockEntriesTableRef.current && allStockEntriesTableRef.current.loadEntries) {
+      await allStockEntriesTableRef.current.loadEntries(1, null, true);
+    }
     // Indicate that an item was added for capital management update
     await handleAddModalClose(true);
   }}

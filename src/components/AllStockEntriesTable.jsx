@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { deleteStockItem, updateMainStock, fetchStockEntries, deductFromMainStock } from "../utils/stockService";
 import { fetchAuthSession } from "aws-amplify/auth";
 import DeleteConfirmModal from "../utils/DeleteConfirmModal";
 
-function AllStockEntriesTable({ onRefresh, loading: parentLoading }) {
+const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, ref) => {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filterDate, setFilterDate] = useState("");
@@ -18,6 +18,11 @@ function AllStockEntriesTable({ onRefresh, loading: parentLoading }) {
     const [lastEvaluatedKey, setLastEvaluatedKey] = useState(null);
     const [totalScanned, setTotalScanned] = useState(0);
     const itemsPerPage = 10;
+
+    // Expose loadEntries method to parent component
+    useImperativeHandle(ref, () => ({
+        loadEntries
+    }));
 
     // Load entries on component mount and when page changes
     useEffect(() => {
@@ -350,6 +355,6 @@ function AllStockEntriesTable({ onRefresh, loading: parentLoading }) {
             )}
         </div>
     );
-}
+});
 
 export default AllStockEntriesTable;
