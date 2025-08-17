@@ -45,6 +45,20 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
     const [showDropdown, setShowDropdown] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [customerId, setCustomerId] = useState("");
+    const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+    const [lastCustomerUpdate, setLastCustomerUpdate] = useState(null);
+
+    // Handle click outside to close dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showDropdown && !event.target.closest('.customer-search-container')) {
+                setShowDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showDropdown]);
 
     // Product variations from stock tables
     const [availableVariations, setAvailableVariations] = useState([]);
@@ -113,6 +127,11 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         } else if (!isEditMode && isOpen) {
             // Reset form for add mode
             resetForm();
+            // Clear any existing customer selection for new transactions
+            setSelectedCustomer(null);
+            setCustomerId("");
+            setSearchTerm("");
+            setShowDropdown(false);
         }
     }, [transaction, isOpen, customerDetails, isEditMode]);
 
@@ -130,6 +149,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         setSelectedCustomer(null);
         setCustomerId("");
         setAvailableVariations([]);
+        setShowDropdown(false); // Close dropdown when resetting
     };
 
     // Load customers from DynamoDB
@@ -138,6 +158,17 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
             fetchCustomers();
         }
     }, [isAuthenticated, isOpen]);
+
+    // Refresh customers when modal opens to ensure fresh data
+    useEffect(() => {
+        if (isOpen && isAuthenticated) {
+            // Small delay to ensure modal is fully rendered
+            const timer = setTimeout(() => {
+                fetchCustomers();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen]);
 
     // Fetch product variations when product type or category changes
     useEffect(() => {
@@ -170,13 +201,33 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
 
     const fetchCustomers = async () => {
         try {
+            setIsLoadingCustomers(true);
             const dynamoClient = await createDynamoDBClient();
             const command = new ScanCommand({ TableName: CUSTOMERS_TABLE_NAME });
             const response = await dynamoClient.send(command);
             const items = response.Items.map((item) => unmarshall(item));
-            setCustomers(items);
+            
+            // Filter out any customers that might have been soft-deleted or have invalid data
+            const validCustomers = items.filter(customer => 
+                customer && 
+                customer.CustomerID && 
+                customer.Name && 
+                customer.Name.trim() !== '' &&
+                customer.PhoneNumber && 
+                customer.PhoneNumber.trim() !== ''
+            );
+            
+            // Sort customers by name for better UX
+            validCustomers.sort((a, b) => a.Name.localeCompare(b.Name));
+            
+            setCustomers(validCustomers);
+            setLastCustomerUpdate(new Date());
+            console.log(`Fetched ${validCustomers.length} valid customers from database`);
         } catch (error) {
             console.error("Error fetching customers:", error);
+            setCustomers([]);
+        } finally {
+            setIsLoadingCustomers(false);
         }
     };
 
@@ -258,7 +309,9 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
     };
 
     const handleProductTypeChange = (e) => {
-        setProductType(e.target.value);
+        const newProductType = e.target.value;
+        setProductType(newProductType);
+        
         // Reset related fields when product type changes
         setProductVariation("");
         setQuantity("");
@@ -266,6 +319,20 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         setCogs("");
         setNetProfit("");
         setAvailableVariations([]);
+        
+        // Clear customer selection when product type changes
+        setSelectedCustomer(null);
+        setCustomerId("");
+        setSearchTerm("");
+        setShowDropdown(false);
+        
+        // Refresh customers to ensure we have the latest data for the new product type
+        if (customers.length > 0) {
+            fetchCustomers();
+        }
+        
+        // Show a brief message about the change
+        console.log(`Product type changed to ${newProductType}. Customer list will be filtered accordingly.`);
     };
 
     const handleProductCategoryChange = (e) => {
@@ -308,6 +375,12 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
     };
 
     const handleCustomerSelect = (customer) => {
+        // Validate that the selected customer matches the current product type
+        if (customer.CustomerType !== productType) {
+            alert(`This customer is a ${customer.CustomerType} customer, but you've selected ${productType} as the product type. Please select a customer that matches your product type.`);
+            return;
+        }
+        
         setSelectedCustomer(customer);
         setCustomerId(customer.CustomerID);
         setSearchTerm(customer.Name);
@@ -315,9 +388,24 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
     };
 
     const filterCustomers = () => {
-        if (!searchTerm.trim()) return customers;
+        // First filter by product type (wholesale/retail)
+        let filteredByType = customers.filter(customer => {
+            if (!customer || !customer.CustomerType) return false;
+            
+            if (productType === "Wholesale") {
+                return customer.CustomerType === "Wholesale";
+            } else if (productType === "Retail") {
+                return customer.CustomerType === "Retail";
+            }
+            return true; // If no specific type selected, show all
+        });
 
-        return customers.filter(customer =>
+        // Then filter by search term if provided
+        if (!searchTerm.trim()) return filteredByType;
+
+        return filteredByType.filter(customer =>
+            customer && 
+            customer.Name && 
             customer.Name.toLowerCase().includes(searchTerm.toLowerCase())
         );
     };
@@ -551,45 +639,99 @@ const handleSubmit = async (e) => {
 
                                 <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                                     {/* Customer Name Searchable Dropdown */}
-                                    <div className="relative">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Customer Name <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <Search size={16} className="text-gray-400" />
+                                    <div className="relative customer-search-container">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="block text-sm font-medium text-gray-700">
+                                                Customer Name <span className="text-red-500">*</span>
+                                            </label>
+                                            <span className="text-xs text-gray-500">
+                                                {filterCustomers().length} of {customers.length} customer{customers.length !== 1 ? 's' : ''} ({productType})
+                                                {lastCustomerUpdate && (
+                                                    <span className="ml-1">
+                                                        • {lastCustomerUpdate.toLocaleTimeString()}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <Search size={16} className="text-gray-400" />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={searchTerm}
+                                                    onChange={(e) => {
+                                                        setSearchTerm(e.target.value);
+                                                        setShowDropdown(true);
+                                                        if (e.target.value === "") {
+                                                            setSelectedCustomer(null);
+                                                            setCustomerId("");
+                                                        }
+                                                    }}
+                                                    onFocus={() => setShowDropdown(true)}
+                                                    placeholder={`Search ${productType.toLowerCase()} customers...`}
+                                                    className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                />
                                             </div>
-                                            <input
-                                                type="text"
-                                                value={searchTerm}
-                                                onChange={(e) => {
-                                                    setSearchTerm(e.target.value);
-                                                    setShowDropdown(true);
-                                                    if (e.target.value === "") {
-                                                        setSelectedCustomer(null);
-                                                        setCustomerId("");
-                                                    }
-                                                }}
-                                                onFocus={() => setShowDropdown(true)}
-                                                placeholder="Search customers..."
-                                                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            />
+                                            <button
+                                                type="button"
+                                                onClick={fetchCustomers}
+                                                disabled={isLoadingCustomers}
+                                                className="px-3 py-2 text-sm text-gray-600 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                                                title="Refresh customer list"
+                                            >
+                                                {isLoadingCustomers ? (
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                                                ) : (
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                )}
+                                            </button>
                                         </div>
 
                                         {showDropdown && (
                                             <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md max-h-60 overflow-auto">
-                                                {filterCustomers().length > 0 ? (
+                                                {isLoadingCustomers ? (
+                                                    <div className="px-4 py-2 text-gray-500 text-center">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mx-auto mb-2"></div>
+                                                        Loading customers...
+                                                    </div>
+                                                ) : filterCustomers().length > 0 ? (
                                                     filterCustomers().map((customer) => (
                                                         <div
                                                             key={customer.CustomerID}
                                                             className="px-4 py-2 hover:bg-blue-50 cursor-pointer"
                                                             onClick={() => handleCustomerSelect(customer)}
                                                         >
-                                                            {customer.Name}
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="font-medium">{customer.Name}</div>
+                                                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                                                    customer.CustomerType === "Wholesale" 
+                                                                        ? "bg-indigo-100 text-indigo-700" 
+                                                                        : "bg-green-100 text-green-700"
+                                                                }`}>
+                                                                    {customer.CustomerType}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500">{customer.PhoneNumber}</div>
                                                         </div>
                                                     ))
+                                                ) : searchTerm.trim() ? (
+                                                    <div className="px-4 py-2 text-gray-500">No customer found matching "{searchTerm}"</div>
+                                                ) : customers.length === 0 ? (
+                                                    <div className="px-4 py-2 text-gray-500 text-center">
+                                                        <div className="text-sm font-medium mb-1">No customers found</div>
+                                                        <div className="text-xs">Please add customers first or refresh the list</div>
+                                                    </div>
+                                                ) : filterCustomers().length === 0 ? (
+                                                    <div className="px-4 py-2 text-gray-500 text-center">
+                                                        <div className="text-sm font-medium mb-1">No {productType.toLowerCase()} customers found</div>
+                                                        <div className="text-xs">Try changing the product type or add {productType.toLowerCase()} customers</div>
+                                                    </div>
                                                 ) : (
-                                                    <div className="px-4 py-2 text-gray-500">No customer found</div>
+                                                    <div className="px-4 py-2 text-gray-500">Type to search {productType.toLowerCase()} customers</div>
                                                 )}
                                             </div>
                                         )}
@@ -628,6 +770,9 @@ const handleSubmit = async (e) => {
                                                 className="w-full pl-10 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                 placeholderText="Select date and time"
                                             />
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            Showing only {productType.toLowerCase()} customers • {filterCustomers().length} available
                                         </div>
                                     </div>
 
