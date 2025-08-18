@@ -12,6 +12,16 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const [isDeleting, setIsDeleting] = useState(false);
     const [error, setError] = useState("");
     
+    // Editing states for additional fields
+    const [editingEntry, setEditingEntry] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [editForm, setEditForm] = useState({
+        seriesStartNumber: "",
+        seriesEndNumber: "",
+        chalalNumber: "",
+        chalalDate: ""
+    });
+    
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
@@ -105,6 +115,149 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const handleDeleteClick = (entry) => {
         setDeleteEntry(entry);
         setError("");
+    };
+
+    const handleEditClick = (entry) => {
+        setEditingEntry(entry);
+        setEditForm({
+            seriesStartNumber: entry.seriesStartNumber || "",
+            seriesEndNumber: entry.seriesEndNumber || "",
+            chalalNumber: entry.chalalNumber || "",
+            chalalDate: entry.chalalDate || ""
+        });
+        setError("");
+    };
+
+    const handleEditCancel = () => {
+        setEditingEntry(null);
+        setEditForm({
+            seriesStartNumber: "",
+            seriesEndNumber: "",
+            chalalNumber: "",
+            chalalDate: ""
+        });
+        setError("");
+    };
+
+    const handleEditSave = async () => {
+        if (!editingEntry) return;
+        
+        setIsSaving(true);
+        setError("");
+        
+        try {
+            const session = await fetchAuthSession();
+            const token = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+            
+            // Import DynamoDB client and commands
+            const { DynamoDBClient, UpdateItemCommand } = await import("@aws-sdk/client-dynamodb");
+            const { fromCognitoIdentityPool } = await import("@aws-sdk/credential-provider-cognito-identity");
+            
+            const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+            const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID;
+            
+            const credentials = fromCognitoIdentityPool({
+                identityPoolId: IDENTITY_POOL_ID,
+                logins: {
+                    [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: token,
+                },
+                clientConfig: { region: REGION },
+            });
+
+            const client = new DynamoDBClient({
+                region: REGION,
+                credentials,
+            });
+
+            // Build update expression and attribute values
+            const updateExpressions = [];
+            const expressionAttributeValues = {};
+            const expressionAttributeNames = {};
+
+                         if (editForm.seriesStartNumber !== "") {
+                 updateExpressions.push("#ssn = :ssn");
+                 expressionAttributeNames["#ssn"] = "SeriesStartNumber";
+                 // Convert to number if possible, otherwise store as string
+                 const startNum = Number(editForm.seriesStartNumber);
+                 if (!isNaN(startNum)) {
+                     expressionAttributeValues[":ssn"] = { N: startNum.toString() };
+                 } else {
+                     expressionAttributeValues[":ssn"] = { S: editForm.seriesStartNumber };
+                 }
+             }
+
+             if (editForm.seriesEndNumber !== "") {
+                 updateExpressions.push("#sen = :sen");
+                 expressionAttributeNames["#sen"] = "SeriesEndNumber";
+                 // Convert to number if possible, otherwise store as string
+                 const endNum = Number(editForm.seriesEndNumber);
+                 if (!isNaN(endNum)) {
+                     expressionAttributeValues[":sen"] = { N: endNum.toString() };
+                 } else {
+                     expressionAttributeValues[":sen"] = { S: editForm.seriesEndNumber };
+                 }
+             }
+
+            if (editForm.chalalNumber !== "") {
+                updateExpressions.push("#cn = :cn");
+                expressionAttributeNames["#cn"] = "ChalalNumber";
+                expressionAttributeValues[":cn"] = { S: editForm.chalalNumber };
+            }
+
+            if (editForm.chalalDate !== "") {
+                updateExpressions.push("#cd = :cd");
+                expressionAttributeNames["#cd"] = "ChalalDate";
+                expressionAttributeValues[":cd"] = { S: editForm.chalalDate };
+            }
+
+            if (updateExpressions.length === 0) {
+                setError("No changes to save");
+                setIsSaving(false);
+                return;
+            }
+
+            const updateCommand = new UpdateItemCommand({
+                TableName: "Stock_Entries",
+                Key: {
+                    Date: { S: editingEntry.date },
+                    StockType_VariationName_Timestamp: { S: editingEntry.StockType_VariationName_Timestamp }
+                },
+                UpdateExpression: `SET ${updateExpressions.join(", ")}`,
+                ExpressionAttributeNames: expressionAttributeNames,
+                ExpressionAttributeValues: expressionAttributeValues
+            });
+
+            await client.send(updateCommand);
+
+            // Update the local state
+            const updatedEntries = entries.map(entry => {
+                if (entry.id === editingEntry.id) {
+                    return {
+                        ...entry,
+                        seriesStartNumber: editForm.seriesStartNumber || entry.seriesStartNumber,
+                        seriesEndNumber: editForm.seriesEndNumber || entry.seriesEndNumber,
+                        chalalNumber: editForm.chalalNumber || entry.chalalNumber,
+                        chalalDate: editForm.chalalDate || entry.chalalDate
+                    };
+                }
+                return entry;
+            });
+
+            setEntries(updatedEntries);
+            setEditingEntry(null);
+            setEditForm({
+                seriesStartNumber: "",
+                seriesEndNumber: "",
+                chalalNumber: "",
+                chalalDate: ""
+            });
+
+        } catch (err) {
+            console.error("Error updating stock entry:", err);
+            setError("Failed to update stock entry: " + (err.message || "Unknown error"));
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleDeleteConfirm = async () => {
@@ -294,6 +447,10 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (Packets)</th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Series Start</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Series End</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chalal Number</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chalal Date</th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
@@ -309,24 +466,118 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantityPackets || '-'}</td>
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">TK {entry.unitPrice.toFixed(2)}</td>
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">TK {entry.totalValue.toFixed(2)}</td>
+                                            
+                                            {/* Series Start Number */}
+                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.seriesStartNumber}
+                                                        onChange={(e) => setEditForm({...editForm, seriesStartNumber: e.target.value})}
+                                                        className="w-24 px-2 py-1 border rounded text-sm"
+                                                        placeholder="Start"
+                                                    />
+                                                ) : (
+                                                    <span>{entry.seriesStartNumber || '-'}</span>
+                                                )}
+                                            </td>
+                                            
+                                            {/* Series End Number */}
+                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.seriesEndNumber}
+                                                        onChange={(e) => setEditForm({...editForm, seriesEndNumber: e.target.value})}
+                                                        className="w-24 px-2 py-1 border rounded text-sm"
+                                                        placeholder="End"
+                                                    />
+                                                ) : (
+                                                    <span>{entry.seriesEndNumber || '-'}</span>
+                                                )}
+                                            </td>
+                                            
+                                            {/* Chalal Number */}
+                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.chalalNumber}
+                                                        onChange={(e) => setEditForm({...editForm, chalalNumber: e.target.value})}
+                                                        className="w-24 px-2 py-1 border rounded text-sm"
+                                                        placeholder="Chalal #"
+                                                    />
+                                                ) : (
+                                                    <span>{entry.chalalNumber || '-'}</span>
+                                                )}
+                                            </td>
+                                            
+                                            {/* Chalal Date */}
+                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="date"
+                                                        value={editForm.chalalDate}
+                                                        onChange={(e) => setEditForm({...editForm, chalalDate: e.target.value})}
+                                                        className="w-32 px-2 py-1 border rounded text-sm"
+                                                    />
+                                                ) : (
+                                                    <span>{entry.chalalDate || '-'}</span>
+                                                )}
+                                            </td>
+                                            
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {entry.timestampDisplay}
                                             </td>
+                                            
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                <button 
-                                                    className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50 disabled:opacity-50" 
-                                                    title="Delete" 
-                                                    onClick={() => handleDeleteClick(entry)}
-                                                    disabled={isDeleting}
-                                                >
-                                                    {isDeleting && deleteEntry?.id === entry.id ? "Deleting..." : "Delete"}
-                                                </button>
+                                                <div className="flex space-x-1">
+                                                    {editingEntry?.id === entry.id ? (
+                                                        <>
+                                                            <button 
+                                                                className="text-green-600 hover:text-green-900 p-1 rounded-full hover:bg-green-50 disabled:opacity-50" 
+                                                                title="Save" 
+                                                                onClick={handleEditSave}
+                                                                disabled={isSaving}
+                                                            >
+                                                                {isSaving ? "Saving..." : "✓"}
+                                                            </button>
+                                                            <button 
+                                                                className="text-gray-600 hover:text-gray-900 p-1 rounded-full hover:bg-gray-50" 
+                                                                title="Cancel" 
+                                                                onClick={handleEditCancel}
+                                                                disabled={isSaving}
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button 
+                                                                className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50" 
+                                                                title="Edit" 
+                                                                onClick={() => handleEditClick(entry)}
+                                                                disabled={isDeleting}
+                                                            >
+                                                                ✎
+                                                            </button>
+                                                            <button 
+                                                                className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50 disabled:opacity-50" 
+                                                                title="Delete" 
+                                                                onClick={() => handleDeleteClick(entry)}
+                                                                disabled={isDeleting}
+                                                            >
+                                                                {isDeleting && deleteEntry?.id === entry.id ? "Deleting..." : "🗑"}
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="9" className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan="13" className="px-6 py-12 text-center text-gray-500">
                                             {filterDate || filterItemType ? "No stock entries found matching the filters." : "No stock entries found."}
                                         </td>
                                     </tr>

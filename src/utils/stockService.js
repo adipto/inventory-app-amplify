@@ -20,8 +20,8 @@ export const fetchStock = async (tableName, token) => {
 
         // Calculate total value based on stock type
         const totalValue = isRetail
-            ? unitPrice * quantity
-            : unitPrice * quantity * 500; // For wholesale: 1 packet = 500 pcs
+            ? unitPrice * quantity * (item.ItemType?.S === "Court Fee" ? 1 : 1)
+            : unitPrice * quantity * (item.ItemType?.S === "Court Fee" ? 40 * 500 : 500); // For wholesale: 1 packet = 500 pcs (or 40*500 for Court Fee)
 
         // Debug logging
         console.log(`Stock Item Debug - Table: ${tableName}`, {
@@ -42,7 +42,9 @@ export const fetchStock = async (tableName, token) => {
             quantity: quantity,
             unitPrice: unitPrice,
             totalValue: totalValue,
-            calculation: isRetail ? `${unitPrice} * ${quantity}` : `${unitPrice} * ${quantity} * 500`
+            calculation: isRetail 
+                ? `${unitPrice} * ${quantity} * ${item.ItemType?.S === "Court Fee" ? 1 : 1}`
+                : `${unitPrice} * ${quantity} * ${item.ItemType?.S === "Court Fee" ? 40 * 500 : 500}`
         });
 
         return {
@@ -158,8 +160,8 @@ export const getStockItem = async (tableName, itemType, variationName, token) =>
 
     // Calculate total value based on stock type
     const totalValue = isRetail
-        ? unitPrice * quantity
-        : unitPrice * quantity * 20; // For wholesale: 1 packet = 20 pcs
+        ? unitPrice * quantity * (response.Item.ItemType?.S === "Court Fee" ? 1 : 1)
+        : unitPrice * quantity * (response.Item.ItemType?.S === "Court Fee" ? 40 * 500 : 500); // For wholesale: 1 packet = 500 pcs (or 40*500 for Court Fee)
 
     return {
         itemType: response.Item.ItemType?.S || "",
@@ -358,12 +360,17 @@ export const fetchStockEntries = async (token, page = 1, limit = 10, lastEvaluat
                 quantityPackets: item.Quantity_Packets ? Number(item.Quantity_Packets.N) : "",
                 unitPrice: Number(item.UnitPrice?.N || 0),
                 totalValue: item.Quantity_Packets
-                    ? Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Packets?.N || 0) * 500
+                    ? Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Packets?.N || 0) * (item.ItemType?.S === "Court Fee" ? 40 * 500 : 500)
                     : Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Pcs?.N || 0),
                 isWholesale: !!item.Quantity_Packets,
                 StockType_VariationName_Timestamp: item.StockType_VariationName_Timestamp?.S,
                 timestamp: item.Timestamp?.N ? Number(item.Timestamp.N) : null,
-                timestampDisplay: item.Timestamp?.N ? new Date(Number(item.Timestamp.N)).toLocaleString() : 'N/A'
+                timestampDisplay: item.Timestamp?.N ? new Date(Number(item.Timestamp.N)).toLocaleString() : 'N/A',
+                // Additional editable fields
+                seriesStartNumber: item.SeriesStartNumber?.S || item.SeriesStartNumber?.N ? (item.SeriesStartNumber.S || item.SeriesStartNumber.N.toString()) : null,
+                seriesEndNumber: item.SeriesEndNumber?.S || item.SeriesEndNumber?.N ? (item.SeriesEndNumber.S || item.SeriesEndNumber.N.toString()) : null,
+                chalalNumber: item.ChalalNumber?.S || null,
+                chalalDate: item.ChalalDate?.S || null
             };
         });
 

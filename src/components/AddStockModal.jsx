@@ -14,7 +14,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
     const [customVariation, setCustomVariation] = useState("");
     const [stockType, setStockType] = useState("Wholesale");
     const [quantity, setQuantity] = useState("");
-    const [lowStockThreshold, setLowStockThreshold] = useState("10");
+    const [lowStockThreshold, setLowStockThreshold] = useState("1");
     const [isLoading, setIsLoading] = useState(false);
     const [isEdit, setIsEdit] = useState(false);
     const [originalItem, setOriginalItem] = useState(null);
@@ -31,11 +31,90 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
     const [predefinedVariations, setPredefinedVariations] = useState({
         "Non-judicial stamp": [],
         "Cartridge Paper": [],
-        "Folio Paper": []
+        "Folio Paper": [],
+        "Court Fee": []
     });
     const [isLoadingVariations, setIsLoadingVariations] = useState(false);
+    const [customVariationError, setCustomVariationError] = useState("");
 
     const isCustomVariation = variation === "__custom__";
+
+    // Validate non-judicial stamp and court fee variations
+    const validateVariation = (variationText) => {
+        console.log("Validating variation:", variationText, "for itemType:", itemType);
+        
+        if (!variationText.trim()) {
+            console.log("Empty variation text, returning empty");
+            return "";
+        }
+        
+        // Non-judicial stamp validation
+        if (itemType === "Non-judicial stamp") {
+            const allowedValues = [5, 10, 20, 25, 30, 40, 50, 100];
+            
+            if (!variationText.includes("-")) {
+                console.log("No dash found, returning format error");
+                return "Non-judicial stamp variation must be in format 'number-price' (e.g., '30-26')";
+            }
+            
+            const firstPart = variationText.split("-")[0];
+            const firstNumber = parseInt(firstPart);
+            console.log("First part:", firstPart, "First number:", firstNumber);
+            
+            if (isNaN(firstNumber)) {
+                console.log("First number is NaN, returning error");
+                return "First part before dash must be a valid number";
+            }
+            
+            if (!allowedValues.includes(firstNumber)) {
+                console.log("First number not in allowed values, returning denomination error");
+                return "No such judical stamp denomination exist, please check your stamp denom";
+            }
+        }
+        
+        // Court Fee validation
+        if (itemType === "Court Fee") {
+            const allowedValues = [1, 2, 3, 4, 5, 10, 20];
+            
+            if (!variationText.includes("-")) {
+                console.log("No dash found, returning format error");
+                return "Court Fee variation must be in format 'number-price' (e.g., '2-10')";
+            }
+            
+            const firstPart = variationText.split("-")[0];
+            const firstNumber = parseInt(firstPart);
+            console.log("First part:", firstPart, "First number:", firstNumber);
+            
+            if (isNaN(firstNumber)) {
+                console.log("First number is NaN, returning error");
+                return "First part before dash must be a valid number";
+            }
+            
+            if (!allowedValues.includes(firstNumber)) {
+                console.log("First number not in allowed values, returning denomination error");
+                return "No such court fee denomination exist, please check your court fee denomination";
+            }
+        }
+        
+        // Cartridge Paper validation
+        if (itemType === "Cartridge Paper") {
+            if (!variationText.startsWith("Cartridge_")) {
+                console.log("Cartridge Paper variation doesn't start with 'Cartridge_'");
+                return "Cartridge Paper variation must start with 'Cartridge_' (e.g., 'Cartridge_6')";
+            }
+        }
+        
+        // Folio Paper validation
+        if (itemType === "Folio Paper") {
+            if (!variationText.startsWith("Folio_")) {
+                console.log("Folio Paper variation doesn't start with 'Folio_'");
+                return "Folio Paper variation must start with 'Folio_' (e.g., 'Folio_6')";
+            }
+        }
+        
+        console.log("Validation passed, returning empty");
+        return "";
+    };
 
     // Helper function to get auth token using AWS Amplify
     const getAuthToken = async () => {
@@ -76,7 +155,8 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             const variationsByType = {
                 "Non-judicial stamp": { retail: [], wholesale: [] },
                 "Cartridge Paper": { retail: [], wholesale: [] },
-                "Folio Paper": { retail: [], wholesale: [] }
+                "Folio Paper": { retail: [], wholesale: [] },
+                "Court Fee": { retail: [], wholesale: [] }
             };
 
             // Process retail items
@@ -146,7 +226,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             setVariation(editItem.variation || "");
             setStockType(editItem.stockType || "Retail");
             setQuantity(editItem.quantity?.toString() || "");
-            setLowStockThreshold(editItem.lowStockThreshold?.toString() || "10");
+            setLowStockThreshold(editItem.lowStockThreshold?.toString() || "1");
             setDate(editItem.date || new Date().toISOString().split('T')[0]);
             setTime(editItem.time || new Date().toTimeString().slice(0, 5));
 
@@ -169,9 +249,10 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         setItemType("Non-judicial stamp");
         setVariation("");
         setCustomVariation("");
+        setCustomVariationError("");
         setStockType("Wholesale");
         setQuantity("");
-        setLowStockThreshold("10");
+        setLowStockThreshold("1");
         setIsEdit(false);
         setOriginalItem(null);
         const today = new Date();
@@ -191,6 +272,17 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         if (!quantity || quantity <= 0) {
             alert("Please enter a valid quantity");
             return;
+        }
+
+        // Validate variation format for non-judicial stamp, court fee, cartridge paper, and folio paper
+        if (itemType === "Non-judicial stamp" || itemType === "Court Fee" || itemType === "Cartridge Paper" || itemType === "Folio Paper") {
+            const finalVariation = isCustomVariation ? customVariation : variation;
+            const validationError = validateVariation(finalVariation);
+            
+            if (validationError) {
+                alert(validationError);
+                return;
+            }
         }
         
         setIsLoading(true);
@@ -511,30 +603,18 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                 </div>
 
                                 <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-                                    {/* Date and Time Row */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                            <input
-                                                type="date"
-                                                value={date}
-                                                onChange={(e) => setDate(e.target.value)}
-                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                required
-                                                disabled={isLoading}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                                            <input
-                                                type="time"
-                                                value={time}
-                                                onChange={(e) => setTime(e.target.value)}
-                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                required
-                                                disabled={isLoading}
-                                            />
-                                        </div>
+                                    {/* Stock Type */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Stock Type</label>
+                                        <select
+                                            value={stockType}
+                                            onChange={(e) => setStockType(e.target.value)}
+                                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            disabled={isLoading}
+                                        >
+                                            <option value="Retail">Retail</option>
+                                            <option value="Wholesale">Wholesale</option>
+                                        </select>
                                     </div>
 
                                     {/* Item Type */}
@@ -596,30 +676,37 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                                 type="text"
                                                 placeholder="Enter custom variation"
                                                 value={customVariation}
-                                                onChange={(e) => setCustomVariation(e.target.value)}
-                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    console.log("Custom variation changed to:", value);
+                                                    setCustomVariation(value);
+                                                    const error = validateVariation(value);
+                                                    console.log("Validation error:", error);
+                                                    setCustomVariationError(error);
+                                                    console.log("Setting customVariationError to:", error);
+                                                }}
+                                                className={`w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                                    customVariationError ? 'border-red-500 focus:ring-red-500' : ''
+                                                }`}
                                                 required
                                                 disabled={isLoading}
                                             />
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                For price extraction, use format "value-price" (e.g., "100-90") or "name_price" (e.g., "Folio_6")
-                                            </p>
+                                            {customVariationError ? (
+                                                <p className="text-xs text-red-600 mt-1">
+                                                    {customVariationError}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {itemType === "Non-judicial stamp" || itemType === "Court Fee" 
+                                                        ? "For price extraction, use format \"value-price\" (e.g., \"100-100\")"
+                                                        : itemType === "Folio Paper"
+                                                        ? "For price extraction, use format \"name_price\" (e.g., \"Folio_6\")"
+                                                        : "For price extraction, use format \"name_price\" (e.g., \"Cartridge_6\")"
+                                                    }
+                                                </p>
+                                            )}
                                         </div>
                                     )}
-
-                                    {/* Stock Type */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Stock Type</label>
-                                        <select
-                                            value={stockType}
-                                            onChange={(e) => setStockType(e.target.value)}
-                                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            disabled={isLoading}
-                                        >
-                                            <option value="Retail">Retail</option>
-                                            <option value="Wholesale">Wholesale</option>
-                                        </select>
-                                    </div>
 
                                     {/* Quantity */}
                                     <div>
@@ -661,6 +748,32 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                         <p className="text-xs text-gray-500 mt-1">
                                             Items below this quantity will be marked as low stock
                                         </p>
+                                    </div>
+
+                                    {/* Date and Time Row */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                            <input
+                                                type="date"
+                                                value={date}
+                                                onChange={(e) => setDate(e.target.value)}
+                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                required
+                                                disabled={isLoading}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                                            <input
+                                                type="time"
+                                                value={time}
+                                                onChange={(e) => setTime(e.target.value)}
+                                                className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                required
+                                                disabled={isLoading}
+                                            />
+                                        </div>
                                     </div>
 
                                     {/* Submit */}

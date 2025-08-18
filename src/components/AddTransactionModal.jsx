@@ -186,13 +186,24 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
 
             if (!isNaN(quantityNum) && !isNaN(sellingPriceNum) && !isNaN(cogsNum)) {
                 let profit;
-                if (productType === "Retail") {
-                    // Retail: Net Profit = (Quantity_pcs * Selling price) - (COGS_pcs * Quantity_pcs)
-                    profit = (quantityNum * sellingPriceNum) - (cogsNum * quantityNum);
+                if (productCategory === "Court Fee") {
+                    if (productType === "Retail") {
+                        // Retail Court Fee: Net Profit = (Quantity_pieces * Selling price per piece) - (COGS_per_court_fee * Quantity_pieces)
+                        profit = (quantityNum * sellingPriceNum) - (cogsNum * quantityNum);
+                    } else {
+                        // Wholesale Court Fee: Net Profit = (Quantity_bundles * Selling price per bundle) - (COGS_per_court_fee * 40 * 500 * Quantity_bundles)
+                        const courtFeesPerBundle = 40 * 500; // 40 court fees per page * 500 pages per bundle
+                        profit = (quantityNum * sellingPriceNum) - (cogsNum * courtFeesPerBundle * quantityNum);
+                    }
                 } else {
-                    // Wholesale: Net Profit = (Quantity_packets * Selling price per packet) - (COGS_per_piece * 500 * Quantity_packets)
-                    const piecesPerPacket = 500;
-                    profit = (quantityNum * sellingPriceNum) - (cogsNum * piecesPerPacket * quantityNum);
+                    if (productType === "Retail") {
+                        // Retail: Net Profit = (Quantity_pcs * Selling price) - (COGS_pcs * Quantity_pcs)
+                        profit = (quantityNum * sellingPriceNum) - (cogsNum * quantityNum);
+                    } else {
+                        // Wholesale: Net Profit = (Quantity_packets * Selling price per packet) - (COGS_per_piece * 500 * Quantity_packets)
+                        const piecesPerPacket = 500;
+                        profit = (quantityNum * sellingPriceNum) - (cogsNum * piecesPerPacket * quantityNum);
+                    }
                 }
                 setNetProfit(profit.toFixed(2));
             }
@@ -246,7 +257,8 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
             const categoryMap = {
                 "Non-judicial stamp": "Non-judicial stamp",
                 "Cartridge Paper": "Cartridge Paper",
-                "Folio Paper": "Folio Paper"
+                "Folio Paper": "Folio Paper",
+                "Court Fee": "Court Fee"
             };
 
             // Filter variations by category AND stock quantity > 0
@@ -804,6 +816,7 @@ const handleSubmit = async (e) => {
                                             <option value="Non-judicial stamp">Non-judicial stamp</option>
                                             <option value="Cartridge Paper">Cartridge Paper</option>
                                             <option value="Folio Paper">Folio Paper</option>
+                                            <option value="Court Fee">Court Fee</option>
                                         </select>
                                     </div>
 
@@ -874,33 +887,41 @@ const handleSubmit = async (e) => {
                                             step="0.01"
                                             onChange={(e) => setSellingPrice(e.target.value)}
                                             placeholder={productType === "Retail" ? "Price per piece" : "Price per packet"}
-                                                                                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                                                 (productType === "Wholesale" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * 500) ||
-                                                 (productType === "Retail" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs))
-                                                     ? 'border-red-500 focus:ring-red-500' 
-                                                     : ''
-                                             }`}
+                                                                                                                                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                                (productType === "Wholesale" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * (productCategory === "Court Fee" ? 40 * 500 : 500)) ||
+                                                (productType === "Retail" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * (productCategory === "Court Fee" ? 1 : 1))
+                                                    ? 'border-red-500 focus:ring-red-500' 
+                                                    : ''
+                                            }`}
                                         />
                                         {productType === "Wholesale" && cogs && (
                                             <p className="mt-1 text-sm text-gray-600">
-                                                Minimum price: TK {(parseFloat(cogs) * 500).toFixed(2)} (COGS per pc × 500)
+                                                Minimum price: TK {
+                                                    productCategory === "Court Fee" 
+                                                        ? (parseFloat(cogs) * 40 * 500).toFixed(2) + " (COGS per court fee × 40 × 500)"
+                                                        : (parseFloat(cogs) * 500).toFixed(2) + " (COGS per pc × 500)"
+                                                }
                                             </p>
                                         )}
                                         {productType === "Retail" && cogs && (
                                             <p className="mt-1 text-sm text-gray-600">
-                                                Minimum price: TK {parseFloat(cogs).toFixed(2)} (COGS per pc)
+                                                Minimum price: TK {
+                                                    productCategory === "Court Fee"
+                                                        ? parseFloat(cogs).toFixed(2) + " (COGS per court fee)"
+                                                        : parseFloat(cogs).toFixed(2) + " (COGS per pc)"
+                                                }
                                             </p>
                                         )}
-                                                                                 {productType === "Wholesale" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * 500 && (
-                                             <p className="mt-1 text-sm text-red-600">
-                                                 ⚠️ Selling price must be at least TK {(parseFloat(cogs) * 500).toFixed(2)}
-                                             </p>
-                                         )}
-                                         {productType === "Retail" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) && (
-                                             <p className="mt-1 text-sm text-red-600">
-                                                 ⚠️ Selling price must be at least TK {parseFloat(cogs).toFixed(2)}
-                                             </p>
-                                         )}
+                                                                                                                         {productType === "Wholesale" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * (productCategory === "Court Fee" ? 40 * 500 : 500) && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                ⚠️ Selling price must be at least TK {(parseFloat(cogs) * (productCategory === "Court Fee" ? 40 * 500 : 500)).toFixed(2)}
+                                            </p>
+                                        )}
+                                                                                 {productType === "Retail" && cogs && sellingPrice && parseFloat(sellingPrice) < parseFloat(cogs) * (productCategory === "Court Fee" ? 1 : 1) && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                ⚠️ Selling price must be at least TK {(parseFloat(cogs) * (productCategory === "Court Fee" ? 1 : 1)).toFixed(2)}
+                                            </p>
+                                        )}
                                     </div>
 
                                     {/* COGS (auto-filled) */}

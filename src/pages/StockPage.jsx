@@ -217,14 +217,14 @@ function StockPage() {
     if (activeTab === "all") {
       // If item has a property to distinguish, use it; fallback to retail logic
       if (item.stockType === "Wholesale" || item.from === "wholesale") {
-        return item.unitPrice * item.quantity * 20;
+        return item.unitPrice * item.quantity * (item.itemType === "Court Fee" ? 40 * 500 : 500);
       }
       return item.unitPrice * item.quantity;
     }
     if (activeTab === "retail") {
       return item.unitPrice * item.quantity;
     } else {
-      return item.unitPrice * item.quantity * 20;
+      return item.unitPrice * item.quantity * (item.itemType === "Court Fee" ? 40 * 500 : 500);
     }
   };
 

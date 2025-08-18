@@ -114,7 +114,7 @@ function AddCustomerModal({ isOpen, onClose, editingCustomer, refreshCustomers, 
 
             const customerData = {
                 CustomerID: { S: editingCustomer ? editingCustomer.CustomerID : uuidv4() },
-                Name: { S: formState.name },
+                Name: { S: formState.name.toUpperCase() },
                 Address: { S: formState.address || "-" },
                 CustomerType: { S: formState.customerType },
                 Email: { S: formState.email || "-" },
