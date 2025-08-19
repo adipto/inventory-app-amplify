@@ -24,8 +24,6 @@ function TransactionTableContainer({ initialTransactionType, onTransactionTypeCh
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -268,36 +266,7 @@ const getFilteredTransactions = useCallback(() => {
     transactionsPerPage
 ]);
 
-  // Handle edit transaction click
-  const handleModifyTransactionClick = (transaction) => {
-    // Prepare the transaction data for the modal
-    const transactionForEdit = {
-      ...transaction,
-      TransactionID: transaction.TransactionID,
-      CustomerID: transaction.CustomerID,
-      Date: transaction.Date,
-      Time: transaction.Time,
-      ProductName: transaction.ProductName,
-      ProductVariation: transaction.ProductVariation,
 
-      // Add type-specific fields
-      ...(transaction.type === "retail"
-        ? {
-          quantity: transaction.Quantity_Pcs,
-          sellingPrice: transaction.SellingPrice_Per_Pc,
-          cogs: transaction.COGS_Per_Pc,
-        }
-        : {
-          quantity: transaction.Quantity_Packets,
-          sellingPrice: transaction.SellingPrice_Per_Packet,
-          cogs: transaction.COGS_Per_Packet,
-        }),
-      Notes: transaction.Notes,
-    };
-
-    setSelectedTransaction(transactionForEdit);
-    setIsModifyModalOpen(true);
-  };
 
   // Handle delete transaction click
   const handleDeleteClick = (transaction) => {
@@ -433,30 +402,7 @@ const getFilteredTransactions = useCallback(() => {
     }
   };
 
-  const handleModifyModalClose = async () => {
-    setIsModifyModalOpen(false);
-    setSelectedTransaction(null);
-    
-    // Reset pagination and refresh data
-    setCurrentPage(1);
-    setRetailLastEvaluatedKeys([null]);
-    setWholesaleLastEvaluatedKeys([null]);
-    
-    // Refresh ALL data to ensure new transactions appear
-    await fetchData();
-    
-    // Update capital management after transaction modification
-    try {
-      const session = await fetchAuthSession();
-      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
-      if (idToken) {
-        const { updateAfterTransaction } = await import("../utils/capitalManagementService");
-        await updateAfterTransaction(idToken);
-      }
-    } catch (error) {
-      console.error("Error updating capital management:", error);
-    }
-  };
+
 
   // Handle various actions
   const handleRefresh = async () => {
@@ -606,21 +552,13 @@ const getFilteredTransactions = useCallback(() => {
         onTransactionTypeChange={handleTransactionTypeChange}
         onRefresh={handleRefresh}
         onNewTransaction={handleNewTransactionClick}
-        onModifyTransaction={handleModifyTransactionClick}
         onDeleteTransaction={handleDeleteClick}
       />
 
       {/* Add Transaction Modal */}
       <AddTransactionModal isOpen={isModalOpen} onClose={handleModalClose} />
 
-      {/* Edit Transaction Modal */}
-      <AddTransactionModal
-        isOpen={isModifyModalOpen}
-        onClose={handleModifyModalClose}
-        transaction={selectedTransaction}
-        customerDetails={customerDetails}
-        isEdit={true}
-      />
+
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal

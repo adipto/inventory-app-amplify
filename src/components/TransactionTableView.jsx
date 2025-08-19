@@ -3,7 +3,6 @@ import { format } from "date-fns";
 import {
   ChevronDown,
   Clipboard,
-  Edit,
   PlusCircle,
   Search,
   Trash2,
@@ -25,7 +24,6 @@ function TransactionTableView({
   onTransactionTypeChange,
   onRefresh,
   onNewTransaction,
-  onModifyTransaction,
   onDeleteTransaction,
 }) {
   // Format date helper
@@ -309,15 +307,8 @@ function TransactionTableView({
                       <td className="px-3 py-3 text-sm text-gray-500">
                         <div className="flex space-x-1">
                           <button
-                            onClick={() => onModifyTransaction(transaction)}
-                            className="text-yellow-500 hover:text-yellow-700 hover:bg-yellow-50 p-1 rounded transition-colors"
-                            title="Edit Transaction"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
                             onClick={() => onDeleteTransaction(transaction)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                            className="text-red-500 hover:text-red-700 hover:bg-yellow-50 p-1 rounded transition-colors"
                             title="Delete Transaction"
                           >
                             <Trash2 size={14} />
@@ -457,13 +448,6 @@ function TransactionTableView({
               {/* Admin Actions */}
               {isAdmin && (
                 <div className="flex justify-end space-x-3 pt-2 border-t border-gray-100">
-                  <button
-                    onClick={() => onModifyTransaction(transaction)}
-                    className="flex items-center px-3 py-2 text-sm text-yellow-700 bg-yellow-50 rounded-md hover:bg-yellow-100 transition-colors"
-                  >
-                    <Edit size={14} className="mr-1" />
-                    Edit
-                  </button>
                   <button
                     onClick={() => onDeleteTransaction(transaction)}
                     className="flex items-center px-3 py-2 text-sm text-red-700 bg-red-50 rounded-md hover:bg-red-100 transition-colors"

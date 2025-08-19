@@ -406,7 +406,8 @@ const handleSubmit = async (e) => {
         return;
     }
 
-    if (availableVariations.length === 0) {
+    // Skip stock validation for edit mode
+    if (!isEditMode && availableVariations.length === 0) {
         alert("No stock available for the selected product type and category. Please add stock first.");
         return;
     }
@@ -416,20 +417,22 @@ const handleSubmit = async (e) => {
         return;
     }
 
-    // Validate quantity against available stock
-    const selectedVariationItem = availableVariations.find(item =>
-        item.VariationName === productVariation
-    );
-    
-    if (selectedVariationItem) {
-        const availableStock = productType === "Retail" 
-            ? parseInt(selectedVariationItem.Quantity_pcs) || 0
-            : parseInt(selectedVariationItem.Quantity_packets) || 0;
-        const requestedQuantity = parseInt(quantity);
+    // Validate quantity against available stock (skip for edit mode)
+    if (!isEditMode) {
+        const selectedVariationItem = availableVariations.find(item =>
+            item.VariationName === productVariation
+        );
         
-        if (requestedQuantity > availableStock) {
-            alert(`Cannot sell ${requestedQuantity} ${productType === "Retail" ? "pieces" : "packets"}. Only ${availableStock} ${productType === "Retail" ? "pieces" : "packets"} available in stock.`);
-            return;
+        if (selectedVariationItem) {
+            const availableStock = productType === "Retail" 
+                ? parseInt(selectedVariationItem.Quantity_pcs) || 0
+                : parseInt(selectedVariationItem.Quantity_packets) || 0;
+            const requestedQuantity = parseInt(quantity);
+            
+            if (requestedQuantity > availableStock) {
+                alert(`Cannot sell ${requestedQuantity} ${productType === "Retail" ? "pieces" : "packets"}. Only ${availableStock} ${productType === "Retail" ? "pieces" : "packets"} available in stock.`);
+                return;
+            }
         }
     }
 
@@ -889,11 +892,11 @@ const handleSubmit = async (e) => {
                                             value={productVariation}
                                             onChange={handleProductVariationChange}
                                             className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            disabled={availableVariations.length === 0}
+                                            disabled={!isEditMode && availableVariations.length === 0}
                                         >
                                             <option value="">
                                                 {availableVariations.length === 0 
-                                                    ? "No variations with stock available" 
+                                                    ? (isEditMode ? "No variations found" : "No variations with stock available")
                                                     : "Select Variation"
                                                 }
                                             </option>
@@ -908,9 +911,14 @@ const handleSubmit = async (e) => {
                                                 );
                                             })}
                                         </select>
-                                        {availableVariations.length === 0 && (
+                                        {availableVariations.length === 0 && !isEditMode && (
                                             <p className="mt-1 text-sm text-orange-600">
                                                 No stock available for this product type and category. Please add stock first.
+                                            </p>
+                                        )}
+                                        {availableVariations.length === 0 && isEditMode && (
+                                            <p className="mt-1 text-sm text-blue-600">
+                                                Note: This variation currently has no stock, but you can still edit the transaction.
                                             </p>
                                         )}
                                     </div>
@@ -951,6 +959,17 @@ const handleSubmit = async (e) => {
                                                 ? parseInt(selectedVariationItem.Quantity_pcs) || 0
                                                 : parseInt(selectedVariationItem.Quantity_packets) || 0;
                                             const requestedQuantity = parseInt(quantity);
+                                            
+                                            // For edit mode, show stock info without warnings
+                                            if (isEditMode) {
+                                                return (
+                                                    <p className="mt-1 text-sm text-gray-600">
+                                                        Current stock: {availableStock} {productType === "Retail" ? "pieces" : "packets"}
+                                                        {availableStock === 0 && " (Out of Stock)"}
+                                                    </p>
+                                                );
+                                            }
+                                            
                                             if (requestedQuantity > availableStock) {
                                                 return (
                                                     <p className="mt-1 text-sm text-red-600">
