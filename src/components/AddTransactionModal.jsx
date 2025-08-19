@@ -416,6 +416,23 @@ const handleSubmit = async (e) => {
         return;
     }
 
+    // Validate quantity against available stock
+    const selectedVariationItem = availableVariations.find(item =>
+        item.VariationName === productVariation
+    );
+    
+    if (selectedVariationItem) {
+        const availableStock = productType === "Retail" 
+            ? parseInt(selectedVariationItem.Quantity_pcs) || 0
+            : parseInt(selectedVariationItem.Quantity_packets) || 0;
+        const requestedQuantity = parseInt(quantity);
+        
+        if (requestedQuantity > availableStock) {
+            alert(`Cannot sell ${requestedQuantity} ${productType === "Retail" ? "pieces" : "packets"}. Only ${availableStock} ${productType === "Retail" ? "pieces" : "packets"} available in stock.`);
+            return;
+        }
+    }
+
     // Validate that Selling Price (per packet) is not smaller than COGS (per pc) * 500 for wholesale
     if (productType === "Wholesale") {
         const cogsPerPc = parseFloat(cogs);
@@ -864,8 +881,44 @@ const handleSubmit = async (e) => {
                                             min="1"
                                             onChange={(e) => setQuantity(e.target.value)}
                                             placeholder={productType === "Retail" ? "Number of pieces" : "Number of packets"}
-                                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                                (() => {
+                                                    if (!quantity || !productVariation) return '';
+                                                    const selectedVariationItem = availableVariations.find(item =>
+                                                        item.VariationName === productVariation
+                                                    );
+                                                    if (!selectedVariationItem) return '';
+                                                    const availableStock = productType === "Retail" 
+                                                        ? parseInt(selectedVariationItem.Quantity_pcs) || 0
+                                                        : parseInt(selectedVariationItem.Quantity_packets) || 0;
+                                                    const requestedQuantity = parseInt(quantity);
+                                                    return requestedQuantity > availableStock ? 'border-red-500 focus:ring-red-500' : '';
+                                                })()
+                                            }`}
                                         />
+                                        {(() => {
+                                            if (!quantity || !productVariation) return null;
+                                            const selectedVariationItem = availableVariations.find(item =>
+                                                item.VariationName === productVariation
+                                            );
+                                            if (!selectedVariationItem) return null;
+                                            const availableStock = productType === "Retail" 
+                                                ? parseInt(selectedVariationItem.Quantity_pcs) || 0
+                                                : parseInt(selectedVariationItem.Quantity_packets) || 0;
+                                            const requestedQuantity = parseInt(quantity);
+                                            if (requestedQuantity > availableStock) {
+                                                return (
+                                                    <p className="mt-1 text-sm text-red-600">
+                                                        ⚠️ Quantity exceeds available stock. Only {availableStock} {productType === "Retail" ? "pieces" : "packets"} available.
+                                                    </p>
+                                                );
+                                            }
+                                            return (
+                                                <p className="mt-1 text-sm text-gray-600">
+                                                    Available stock: {availableStock} {productType === "Retail" ? "pieces" : "packets"}
+                                                </p>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Selling Price */}
