@@ -8,6 +8,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const [loading, setLoading] = useState(false);
     const [filterDate, setFilterDate] = useState("");
     const [filterItemType, setFilterItemType] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
     const [deleteEntry, setDeleteEntry] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [error, setError] = useState("");
@@ -145,7 +146,17 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             matchesDate = entryTimestamp >= startTimestamp && entryTimestamp < endTimestamp;
         }
         const matchesType = filterItemType ? entry.itemType === filterItemType : true;
-        return matchesDate && matchesType;
+        
+        // Apply search filter for chalan number or series start
+        let matchesSearch = true;
+        if (searchQuery.trim()) {
+            const searchTerm = searchQuery.toLowerCase().trim();
+            const chalanNumber = (entry.chalanNumber || "").toLowerCase();
+            const seriesStart = (entry.seriesStartNumber || "").toLowerCase();
+            matchesSearch = chalanNumber.includes(searchTerm) || seriesStart.includes(searchTerm);
+        }
+        
+        return matchesDate && matchesType && matchesSearch;
     });
 
     const itemTypes = Array.from(new Set(entries.map(e => e.itemType)));
@@ -604,6 +615,16 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                     <option key={type} value={type}>{type}</option>
                                 ))}
                             </select>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                            <label className="text-sm text-gray-600">Search:</label>
+                            <input
+                                type="text"
+                                placeholder="Search by chalan number or series start..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="border rounded px-2 py-1 text-sm w-64"
+                            />
                         </div>
                     </div>
                     

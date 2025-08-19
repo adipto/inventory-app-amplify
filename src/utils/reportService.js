@@ -63,7 +63,7 @@ export const fetchYearlyTransactions = async (idToken, year) => {
 // Fetch all-time reports (scan all tables)
 export const fetchAllTimeReports = async (idToken) => {
     try {
-        console.log("Fetching all-time transaction reports");
+        console.log("🚀 Fetching ALL-TIME transaction reports - Scanning ENTIRE tables...");
         
         // Scan all transactions from both tables
         const [retail, wholesale] = await Promise.all([
@@ -71,19 +71,33 @@ export const fetchAllTimeReports = async (idToken) => {
             fetchAllWholesaleTransactions(idToken)
         ]);
 
-        console.log(`Retrieved ${retail.length} retail and ${wholesale.length} wholesale transactions (all-time)`);
+        console.log(`✅ Retrieved ${retail.length} retail and ${wholesale.length} wholesale transactions (ALL-TIME from ENTIRE tables)`);
+        console.log(`📊 Total transactions for all-time analysis: ${retail.length + wholesale.length}`);
 
-        return processTransactionData(retail, wholesale, null, null, "alltime");
+        const result = processTransactionData(retail, wholesale, null, null, "alltime");
+        
+        console.log(`🎯 All-time report data summary:`, {
+            dailySalesRecords: result.dailySales.length,
+            monthlySummaryRecords: result.monthlySummary.length,
+            topProductsCount: result.topProducts.length,
+            profitCategoriesCount: result.profitByCategory.length,
+            totalTransactionsProcessed: retail.length + wholesale.length
+        });
+
+        return result;
         
     } catch (error) {
-        console.error("Error in fetchAllTimeReports:", error);
+        console.error("❌ Error in fetchAllTimeReports:", error);
         throw error;
     }
 };
 
 // Helper function to process transaction data
 const processTransactionData = (retail, wholesale, month, year, mode) => {
-    console.log(`Processing transaction data - Mode: ${mode}, Month: ${month}, Year: ${year}`);
+    console.log(`🔄 Processing transaction data - Mode: ${mode}, Month: ${month}, Year: ${year}`);
+    if (mode === "alltime") {
+        console.log(`🌍 ALL-TIME MODE: Processing ALL ${retail.length + wholesale.length} transactions from ENTIRE tables`);
+    }
     
     const formatDate = (d) => dayjs(d).format("YYYY-MM-DD");
     const formatMonth = (d) => dayjs(d).format("MMM YYYY");
@@ -250,12 +264,17 @@ const processTransactionData = (retail, wholesale, month, year, mode) => {
       };
       
 
-    console.log("retail", retail)
-    console.log("wholesale", wholesale)
+    if (mode === "alltime") {
+        console.log(`📈 ALL-TIME MODE: Starting to process ${retail.length} retail + ${wholesale.length} wholesale = ${retail.length + wholesale.length} total transactions`);
+    }
 
     // Process both retail and wholesale transactions
     processTransactions(retail, "retail");
     processTransactions(wholesale, "wholesale");
+    
+    if (mode === "alltime") {
+        console.log(`✅ ALL-TIME MODE: Finished processing all transactions. Total processed: ${allTransactions.length}`);
+    }
     
     
 

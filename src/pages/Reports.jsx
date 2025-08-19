@@ -203,11 +203,39 @@ const TopCustomerComponent = () => {
                         credentials,
                     });
 
-                    // Fetch transactions from both retail and wholesale tables
-                    const [retailResponse, wholesaleResponse] = await Promise.all([
-                        client.send(new ScanCommand({ TableName: "Transaction_Retail" })),
-                        client.send(new ScanCommand({ TableName: "Transaction_Wholesale" }))
-                    ]);
+                    // Fetch transactions from both retail and wholesale tables (with pagination for large tables)
+                    console.log("🔍 Fetching ALL transactions from both tables for top customers analysis...");
+                    
+                    let allRetailTransactions = [];
+                    let allWholesaleTransactions = [];
+                    
+                    // Scan retail table with pagination
+                    let retailLastKey = null;
+                    do {
+                        const retailParams = { TableName: "Transaction_Retail" };
+                        if (retailLastKey) retailParams.ExclusiveStartKey = retailLastKey;
+                        
+                        const retailResponse = await client.send(new ScanCommand(retailParams));
+                        if (retailResponse.Items) {
+                            allRetailTransactions.push(...retailResponse.Items);
+                        }
+                        retailLastKey = retailResponse.LastEvaluatedKey;
+                    } while (retailLastKey);
+                    
+                    // Scan wholesale table with pagination
+                    let wholesaleLastKey = null;
+                    do {
+                        const wholesaleParams = { TableName: "Transaction_Wholesale" };
+                        if (wholesaleLastKey) wholesaleParams.ExclusiveStartKey = wholesaleLastKey;
+                        
+                        const wholesaleResponse = await client.send(new ScanCommand(wholesaleParams));
+                        if (wholesaleResponse.Items) {
+                            allWholesaleTransactions.push(...wholesaleResponse.Items);
+                        }
+                        wholesaleLastKey = wholesaleResponse.LastEvaluatedKey;
+                    } while (wholesaleLastKey);
+                    
+                    console.log(`✅ Retrieved ${allRetailTransactions.length} retail + ${allWholesaleTransactions.length} wholesale = ${allRetailTransactions.length + allWholesaleTransactions.length} total transactions for top customers analysis`);
 
                     // Fetch customer details
                     const customerResponse = await client.send(new ScanCommand({ TableName: "Customer_Information" }));
@@ -218,8 +246,8 @@ const TopCustomerComponent = () => {
                     });
 
                     // Process retail transactions
-                    const retailTransactions = retailResponse.Items.map(item => unmarshall(item));
-                    const wholesaleTransactions = wholesaleResponse.Items.map(item => unmarshall(item));
+                    const retailTransactions = allRetailTransactions.map(item => unmarshall(item));
+                    const wholesaleTransactions = allWholesaleTransactions.map(item => unmarshall(item));
 
                     // Combine all transactions
                     const allTransactions = [
@@ -270,6 +298,13 @@ const TopCustomerComponent = () => {
                         .filter(customer => customer.customerDetails) // Only include customers with details
                         .sort((a, b) => b.totalRevenue - a.totalRevenue)
                         .slice(0, 5); // Top 5 customers
+
+                    console.log(`🎯 Top Customers Analysis Complete:`, {
+                        totalCustomersAnalyzed: Object.keys(customerTotals).length,
+                        top5Customers: topCustomersList.length,
+                        totalTransactionsProcessed: retailTransactions.length + wholesaleTransactions.length,
+                        totalRevenueAnalyzed: Object.values(customerTotals).reduce((sum, c) => sum + c.totalRevenue, 0)
+                    });
 
                     setTopCustomers(topCustomersList);
                 }
@@ -577,138 +612,142 @@ function EnhancedReportsPage() {
 
                             </div>
 
-                            {/* === Year-only section (always visible) === */}
-                            <div className="mb-6">
-                            <div className="flex items-center gap-3 mb-3">
-                                <Calendar className="w-5 h-5 text-gray-500" />
-                                <span className="text-sm font-medium text-gray-700">Year-only:</span>
-                                <select
-                                value={selectedYearOnly}
-                                onChange={(e) => setSelectedYearOnly(parseInt(e.target.value))}
-                                className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                >
-                                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i)
-                                    .map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
-                            </div>
+                                                         {/* === Year-only section (only visible on monthly page) === */}
+                             {!isAllTime && (
+                                 <React.Fragment>
+                                     <div className="mb-6">
+                                         <div className="flex items-center gap-3 mb-3">
+                                             <Calendar className="w-5 h-5 text-gray-500" />
+                                             <span className="text-sm font-medium text-gray-700">Year-only:</span>
+                                             <select
+                                                 value={selectedYearOnly}
+                                                 onChange={(e) => setSelectedYearOnly(parseInt(e.target.value))}
+                                                 className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                             >
+                                                 {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i)
+                                                     .map(y => <option key={y} value={y}>{y}</option>)}
+                                             </select>
+                                         </div>
 
-                            {/* Year-only totals */}
-                            <SummaryStats data={yearOnlySummary} />
-                            </div>
+                                         {/* Year-only totals */}
+                                         <SummaryStats data={yearOnlySummary} />
+                                     </div>
 
-                            {/* Monthly Profit Histogram - NEW SECTION */}
-                            <div className="mb-6">
-                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="p-2 bg-green-50 rounded-lg">
-                                            <TrendingUp className="w-5 h-5 text-green-600" />
-                                        </div>
-                                        <h2 className="text-xl font-semibold text-gray-800">Monthly Profit Overview - {selectedYearOnly}</h2>
-                                    </div>
-                                    
-                                    {yearOnlySummary.length > 0 ? (
-                                        <div className="space-y-4">
-                                            {/* Monthly Profit Bars */}
-                                            <div className="grid grid-cols-12 gap-2 mb-6">
-                                                {yearOnlySummary.map((monthData, index) => {
-                                                    const monthName = monthData.month;
-                                                    const profit = monthData.profit || 0;
-                                                    const revenue = monthData.revenue || 0;
-                                                    const profitMargin = revenue > 0 ? ((profit / revenue) * 100) : 0;
-                                                    
-                                                    // Find max profit for scaling
-                                                    const maxProfit = Math.max(...yearOnlySummary.map(m => m.profit || 0), 1);
-                                                    const barHeight = maxProfit > 0 ? (profit / maxProfit) * 200 : 0;
-                                                    
-                                                    return (
-                                                        <div key={index} className="flex flex-col items-center">
-                                                            {/* Profit Bar */}
-                                                            <div className="w-full bg-gray-200 rounded-t-sm" style={{ height: '200px', position: 'relative' }}>
-                                                                <div 
-                                                                    className="w-full bg-green-500 rounded-t-sm transition-all duration-300 hover:bg-green-600"
-                                                                    style={{ height: `${barHeight}px` }}
-                                                                    title={`${monthName}: TK ${profit.toLocaleString()} (${profitMargin.toFixed(1)}% margin)`}
-                                                                ></div>
-                                                            </div>
-                                                            
-                                            {/* Month Label */}
-                                            <div className="text-xs text-gray-600 mt-2 text-center font-medium">
-                                                {monthName}
-                                            </div>
-                                            
-                                            {/* Profit Amount */}
-                                            <div className="text-xs font-semibold text-green-600 text-center">
-                                                TK {profit.toLocaleString()}
-                                            </div>
-                                            
-                                            {/* Profit Margin */}
-                                            <div className="text-xs text-gray-500 text-center">
-                                                {profitMargin.toFixed(1)}%
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            
-                            {/* Summary Stats */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
-                                <div className="text-center">
-                                    <div className="text-2xl font-bold text-green-600">
-                                        TK {yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0).toLocaleString()}
-                                    </div>
-                                    <div className="text-sm text-gray-600">Total Annual Profit</div>
-                                </div>
-                                <div className="text-center">
-                                    <div className="text-2xl font-bold text-blue-600">
-                                        TK {Math.round(yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0) / 12).toLocaleString()}
-                                    </div>
-                                    <div className="text-sm text-gray-600">Average Monthly Profit</div>
-                                </div>
-                                <div className="text-center">
-                                    <div className="text-2xl font-bold text-purple-600">
-                                        {(() => {
-                                            const totalRevenue = yearOnlySummary.reduce((sum, month) => sum + (month.revenue || 0), 0);
-                                            const totalProfit = yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0);
-                                            return totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0.0';
-                                        })()}%
-                                    </div>
-                                    <div className="text-sm text-gray-600">Annual Profit Margin</div>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-gray-500">
-                            <TrendingUp className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                            <p>No monthly data available for {selectedYearOnly}</p>
-                        </div>
-                    )}
-                </div>
-            </div>
+                                     {/* Monthly Profit Histogram - NEW SECTION */}
+                                     <div className="mb-6">
+                                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                                             <div className="flex items-center gap-3 mb-6">
+                                                 <div className="p-2 bg-green-50 rounded-lg">
+                                                     <TrendingUp className="w-5 h-5 text-green-600" />
+                                                 </div>
+                                                 <h2 className="text-xl font-semibold text-gray-800">Monthly Profit Overview - {selectedYearOnly}</h2>
+                                             </div>
+                                             
+                                             {yearOnlySummary.length > 0 ? (
+                                                 <div className="space-y-4">
+                                                     {/* Monthly Profit Bars */}
+                                                     <div className="grid grid-cols-12 gap-2 mb-6">
+                                                         {yearOnlySummary.map((monthData, index) => {
+                                                             const monthName = monthData.month;
+                                                             const profit = monthData.profit || 0;
+                                                             const revenue = monthData.revenue || 0;
+                                                             const profitMargin = revenue > 0 ? ((profit / revenue) * 100) : 0;
+                                                             
+                                                             // Find max profit for scaling
+                                                             const maxProfit = Math.max(...yearOnlySummary.map(m => m.profit || 0), 1);
+                                                             const barHeight = maxProfit > 0 ? (profit / maxProfit) * 200 : 0;
+                                                             
+                                                             return (
+                                                                 <div key={index} className="flex flex-col items-center">
+                                                                     {/* Profit Bar */}
+                                                                     <div className="w-full bg-gray-200 rounded-t-sm" style={{ height: '200px', position: 'relative' }}>
+                                                                         <div 
+                                                                             className="w-full bg-green-500 rounded-t-sm transition-all duration-300 hover:bg-green-600"
+                                                                             style={{ height: `${barHeight}px` }}
+                                                                             title={`${monthName}: TK ${profit.toLocaleString()} (${profitMargin.toFixed(1)}% margin)`}
+                                                                         ></div>
+                                                                     </div>
+                                                                     
+                                                                     {/* Month Label */}
+                                                                     <div className="text-xs text-gray-600 mt-2 text-center font-medium">
+                                                                         {monthName}
+                                                                     </div>
+                                                                     
+                                                                     {/* Profit Amount */}
+                                                                     <div className="text-xs font-semibold text-green-600 text-center">
+                                                                         TK {profit.toLocaleString()}
+                                                                     </div>
+                                                                     
+                                                                     {/* Profit Margin */}
+                                                                     <div className="text-xs text-gray-500 text-center">
+                                                                         {profitMargin.toFixed(1)}%
+                                                                     </div>
+                                                                 </div>
+                                                             );
+                                                         })}
+                                                     </div>
+                                                     
+                                                     {/* Summary Stats */}
+                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                                                         <div className="text-center">
+                                                             <div className="text-2xl font-bold text-green-600">
+                                                                 TK {yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0).toLocaleString()}
+                                                             </div>
+                                                             <div className="text-sm text-gray-600">Total Annual Profit</div>
+                                                         </div>
+                                                         <div className="text-center">
+                                                             <div className="text-2xl font-bold text-blue-600">
+                                                                 TK {Math.round(yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0) / 12).toLocaleString()}
+                                                             </div>
+                                                             <div className="text-sm text-gray-600">Average Monthly Profit</div>
+                                                         </div>
+                                                         <div className="text-center">
+                                                             <div className="text-2xl font-bold text-purple-600">
+                                                                 {(() => {
+                                                                     const totalRevenue = yearOnlySummary.reduce((sum, month) => sum + (month.revenue || 0), 0);
+                                                                     const totalProfit = yearOnlySummary.reduce((sum, month) => sum + (month.profit || 0), 0);
+                                                                     return totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0.0';
+                                                                 })()}%
+                                                             </div>
+                                                             <div className="text-sm text-gray-600">Annual Profit Margin</div>
+                                                         </div>
+                                                     </div>
+                                                 </div>
+                                             ) : (
+                                                 <div className="text-center py-8 text-gray-500">
+                                                     <TrendingUp className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                                     <p>No monthly data available for {selectedYearOnly}</p>
+                                                 </div>
+                                             )}
+                                         </div>
+                                     </div>
 
-            {/* Top Customer Component - Moved here above the Date Selector */}
-            <TopCustomerComponent />
+                                                                           {/* Date Selector - Only show when not in all-time mode */}
+                                      {!isAllTime && (
+                                          <DateSelector
+                                              selectedMonth={selectedMonth}
+                                              selectedYear={selectedYear}
+                                              onMonthChange={handleMonthChange}
+                                              onYearChange={handleYearChange}
+                                          />
+                                      )}
+                                 </React.Fragment>
+                             )}
+                         </div>
 
-            {/* Date Selector - Only show when not in all-time mode */}
-            {!isAllTime && (
-                <DateSelector
-                    selectedMonth={selectedMonth}
-                    selectedYear={selectedYear}
-                    onMonthChange={handleMonthChange}
-                    onYearChange={handleYearChange}
-                />
-            )}
-        </div>
-
-                        {dataLoading ? (
+                         {dataLoading ? (
                             <div className="flex items-center justify-center h-64">
                                 <div className="text-lg text-gray-600">Loading reports...</div>
                             </div>
                         ) : (
-                            <>
-                                {/* Summary Stats */}
-                                <SummaryStats data={monthlySummary} isAllTime={isAllTime} />
+                                                         <>
+                                 {/* Summary Stats */}
+                                 <SummaryStats data={monthlySummary} isAllTime={isAllTime} />
 
-                                <div className="space-y-8">
+                                                                   {/* Top Customer Component - Shows ALL-TIME data from ENTIRE tables */}
+                                 {isAllTime && <TopCustomerComponent />}
+
+                                 <div className="space-y-8">
                                     {/* Daily Sales Trend */}
                                     <ChartCard title={isAllTime ? `Daily Sales Trend (All Time)` : `Daily Sales Trend – ${getMonthName(selectedMonth)} ${selectedYear}`} icon={TrendingUp}>
                                         <ResponsiveContainer width="100%" height={350}>

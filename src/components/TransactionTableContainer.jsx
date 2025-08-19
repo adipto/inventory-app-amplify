@@ -247,13 +247,9 @@ const getFilteredTransactions = useCallback(() => {
             if (!customer) return false;
             const customerName = customer.Name || "";
             const customerPhone = customer.PhoneNumber || "";
-            const customerId = transaction.CustomerID || "";
-            const transactionId = transaction.TransactionID || "";
             return (
                 customerName.toLowerCase().includes(searchTermLower) ||
-                customerPhone.includes(searchTerm) ||
-                customerId.toLowerCase().includes(searchTermLower) ||
-                transactionId.toLowerCase().includes(searchTermLower)
+                customerPhone.includes(searchTerm)
             );
         });
     }

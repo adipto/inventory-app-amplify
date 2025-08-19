@@ -27,16 +27,14 @@ export const initializeCapitalManagement = async (token) => {
       // Default values for the 4 fields
       const defaultInvestment = import.meta.env.VITE_DEFAULT_INITIAL_CAPITAL || "200000";
       
-             const initialRecord = {
-         RecordId: { S: "MAIN_REC" },
-         totalinvestment: { N: defaultInvestment },
-         CashInHand: { N: defaultInvestment }, // Start with initial capital as cash
-         TotalStockValue: { N: "0" },
-         TotalProfit: { N: "0" },
-         TotalRetailQuantity: { N: "0" }, // All-time total retail quantity
-         TotalWholesaleQuantity: { N: "0" }, // All-time total wholesale quantity
-         LastUpdated: { S: new Date().toISOString() }
-       };
+                     const initialRecord = {
+          RecordId: { S: "MAIN_REC" },
+          totalinvestment: { N: defaultInvestment },
+          CashInHand: { N: defaultInvestment }, // Start with initial capital as cash
+          TotalStockValue: { N: "0" },
+          TotalProfit: { N: "0" },
+          LastUpdated: { S: new Date().toISOString() }
+        };
 
       const putCommand = new PutItemCommand({
         TableName: CAPITAL_MANAGEMENT_TABLE,
@@ -289,8 +287,7 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
     let totalStockValue = parseFloat(currentData.TotalStockValue?.N || "0");
     let totalInvestment = parseFloat(currentData.totalinvestment?.N || "0");
     let totalProfit = parseFloat(currentData.TotalProfit?.N || "0");
-    let totalRetailQuantity = parseFloat(currentData.TotalRetailQuantity?.N || "0");
-    let totalWholesaleQuantity = parseFloat(currentData.TotalWholesaleQuantity?.N || "0");
+
     
     // For stock selling event (positive transactionAmount) or transaction deletion (negative transactionAmount):
     // 1. Cash in Hand = C.H + total stock selling price (or - for deletion)
@@ -325,16 +322,7 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
           console.log(`Total profit decreased by transaction amount (fallback): ${totalStockSellingPrice.toFixed(2)}`);
         }
         
-        // 5. Update quantity tracking for deletion
-        if (quantity !== null && transactionType !== null) {
-          if (transactionType === "Retail") {
-            totalRetailQuantity -= quantity;
-            console.log(`Total retail quantity decreased by ${quantity} to ${totalRetailQuantity}`);
-          } else if (transactionType === "Wholesale") {
-            totalWholesaleQuantity -= quantity;
-            console.log(`Total wholesale quantity decreased by ${quantity} to ${totalWholesaleQuantity}`);
-          }
-        }
+
         
         console.log(`Transaction deletion detected: ${totalStockSellingPrice.toFixed(2)} worth of stock transaction reversed`);
         console.log(`Cash in hand decreased from ${(cashInHand + totalStockSellingPrice).toFixed(2)} to ${cashInHand.toFixed(2)}`);
@@ -367,19 +355,7 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
           console.log(`Total profit increased by transaction amount (fallback): ${totalStockSellingPrice.toFixed(2)}`);
         }
         
-        // 5. Update quantity tracking for creation
-        console.log('Quantity tracking check:', { quantity, transactionType, quantityNotNull: quantity !== null, transactionTypeNotNull: transactionType !== null });
-        if (quantity !== null && transactionType !== null) {
-          if (transactionType === "Retail") {
-            totalRetailQuantity += quantity;
-            console.log(`Total retail quantity increased by ${quantity} to ${totalRetailQuantity}`);
-          } else if (transactionType === "Wholesale") {
-            totalWholesaleQuantity += quantity;
-            console.log(`Total wholesale quantity increased by ${quantity} to ${totalWholesaleQuantity}`);
-          }
-        } else {
-          console.log('Quantity tracking skipped - quantity or transactionType is null');
-        }
+
         
         console.log(`Stock selling detected: ${totalStockSellingPrice.toFixed(2)} worth of stock sold`);
         console.log(`Cash in hand increased from ${(cashInHand - totalStockSellingPrice).toFixed(2)} to ${cashInHand.toFixed(2)}`);
@@ -413,16 +389,7 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
           console.log(`Total profit increased by stock selling price (fallback): ${totalStockSellingPrice.toFixed(2)}`);
         }
         
-        // 5. Update quantity tracking for creation (fallback)
-        if (quantity !== null && transactionType !== null) {
-          if (transactionType === "Retail") {
-            totalRetailQuantity += quantity;
-            console.log(`Total retail quantity increased by ${quantity} to ${totalRetailQuantity} (fallback)`);
-          } else if (transactionType === "Wholesale") {
-            totalWholesaleQuantity += quantity;
-            console.log(`Total wholesale quantity increased by ${quantity} to ${totalWholesaleQuantity} (fallback)`);
-          }
-        }
+
         
         console.log(`Stock selling detected (fallback): ${totalStockSellingPrice.toFixed(2)} worth of stock sold`);
         console.log(`Cash in hand increased from ${(cashInHand - totalStockSellingPrice).toFixed(2)} to ${cashInHand.toFixed(2)}`);
@@ -448,9 +415,7 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
     const updates = {
       TotalStockValue: { N: totalStockValue.toString() },
       CashInHand: { N: cashInHand.toString() },
-      TotalProfit: { N: totalProfit.toString() },
-      TotalRetailQuantity: { N: totalRetailQuantity.toString() },
-      TotalWholesaleQuantity: { N: totalWholesaleQuantity.toString() }
+      TotalProfit: { N: totalProfit.toString() }
     };
 
     await updateCapitalManagementData(token, updates);
