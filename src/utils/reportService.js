@@ -152,7 +152,21 @@ const processTransactionData = (retail, wholesale, month, year, mode) => {
               ? pricePerPc * pieces
               : pricePerPacket * packs;
       
-            const profit = toNum(txn.NetProfit);
+            // Calculate net profit dynamically: Selling Price - Total Product Cost
+            let profit = 0;
+            if (type === "retail") {
+                // For retail: (Quantity * Selling Price) - (Quantity * COGS)
+                const cogsPerPc = toNum(txn.COGS_Per_Pc);
+                profit = (pricePerPc * pieces) - (cogsPerPc * pieces);
+            } else {
+                // For wholesale: (Quantity * Selling Price) - (Quantity * COGS * multiplier)
+                const cogsPerPacket = toNum(txn.COGS_Per_Packet);
+                let multiplier = 500; // Default for Cartridge, Folio, Non-judicial stamp
+                if (txn.ProductName === "Court Fee") {
+                    multiplier = 40 * 500; // Court Fee specific multiplier
+                }
+                profit = (pricePerPacket * packs) - (cogsPerPacket * multiplier * packs);
+            }
       
             const productVariation = txn.ProductVariation || "";
             const productKey = productVariation

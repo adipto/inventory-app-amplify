@@ -300,7 +300,7 @@ function CapitalManagementTable() {
       console.log('✅ All data refreshed successfully');
       
       // Show success message
-      alert(`Profit of TK ${amount.toLocaleString()} has been taken successfully!\n\nNew Cash in Hand: TK ${newCashInHand.toLocaleString()}\nTransaction ID: ${transactionId || 'N/A'}`);
+      alert(`Profit of BDT ${amount.toLocaleString()} has been taken successfully!\n\nNew Cash in Hand: BDT ${newCashInHand.toLocaleString()}\nTransaction ID: ${transactionId || 'N/A'}`);
       
       handleTakeProfitClose();
       
@@ -600,7 +600,7 @@ function CapitalManagementTable() {
                 <div>
                   <p className="text-sm font-medium text-purple-700">Total Investment</p>
                   <p className="text-xl font-bold text-purple-900">
-                    TK {formatCurrency(data.totalInvestment)}
+                    BDT {formatCurrency(data.totalInvestment)}
                   </p>
                 </div>
               </div>
@@ -613,7 +613,7 @@ function CapitalManagementTable() {
                 <div>
                   <p className={`text-sm font-medium ${data.cashInHand >= 0 ? 'text-green-700' : 'text-red-700'}`}>Cash in Hand</p>
                   <p className={`text-xl font-bold ${data.cashInHand >= 0 ? 'text-green-900' : 'text-red-900'}`}>
-                    TK {formatCurrency(data.cashInHand)}
+                    BDT {formatCurrency(data.cashInHand)}
                   </p>
                 </div>
               </div>
@@ -626,7 +626,7 @@ function CapitalManagementTable() {
                 <div>
                   <p className="text-sm font-medium text-blue-700">Total Stock Value</p>
                   <p className="text-xl font-bold text-blue-900">
-                    TK {formatCurrency(data.totalStockValue)}
+                    BDT {formatCurrency(data.totalStockValue)}
                   </p>
                 </div>
               </div>
@@ -639,7 +639,7 @@ function CapitalManagementTable() {
                 <div>
                   <p className="text-sm font-medium text-orange-700">Total Profit</p>
                   <p className="text-xl font-bold text-orange-900">
-                    TK {formatCurrency(data.totalProfit)}
+                    BDT {formatCurrency(data.totalProfit)}
                   </p>
                 </div>
               </div>
@@ -654,21 +654,21 @@ function CapitalManagementTable() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total Investment:</span>
-                <span className="font-semibold">TK {formatCurrency(data.totalInvestment)}</span>
+                <span className="font-semibold">BDT {formatCurrency(data.totalInvestment)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Cash in Hand:</span>
                 <span className={`font-semibold ${data.cashInHand >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                  TK {formatCurrency(data.cashInHand)}
+                  BDT {formatCurrency(data.cashInHand)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total Stock Value:</span>
-                <span className="font-semibold">TK {formatCurrency(data.totalStockValue)}</span>
+                <span className="font-semibold">BDT {formatCurrency(data.totalStockValue)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Total Profit:</span>
-                <span className="font-semibold text-orange-600">TK {formatCurrency(data.totalProfit)}</span>
+                <span className="font-semibold text-orange-600">BDT {formatCurrency(data.totalProfit)}</span>
               </div>
             </div>
           </div>
@@ -717,7 +717,7 @@ function CapitalManagementTable() {
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Total Profit Taken Out:</p>
                     <p className="text-2xl font-bold text-green-600">
-                      TK {allTimeProfit.toLocaleString()}
+                      BDT {allTimeProfit.toLocaleString()}
                     </p>
                   </div>
                   <div className="text-right">
@@ -765,14 +765,14 @@ function CapitalManagementTable() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         <span className="font-semibold text-green-600">
-                          TK {formatCurrency(transaction.Amount)}
+                          BDT {formatCurrency(transaction.Amount)}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        TK {formatCurrency(transaction.PreviousCashInHand)}
+                        BDT {formatCurrency(transaction.PreviousCashInHand)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        TK {formatCurrency(transaction.NewCashInHand)}
+                        BDT {formatCurrency(transaction.NewCashInHand)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">
                         {transaction.TransactionId}
@@ -822,7 +822,7 @@ function CapitalManagementTable() {
               <p className="text-sm text-gray-600 mb-2">Available amount to take profit from:</p>
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                 <p className="text-lg font-bold text-green-900">
-                  TK {formatCurrency(data.cashInHand)}
+                  BDT {formatCurrency(data.cashInHand)}
                 </p>
               </div>
             </div>
@@ -844,7 +844,7 @@ function CapitalManagementTable() {
                 disabled={isTakingProfit}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Maximum: TK {formatCurrency(data.cashInHand)}
+                Maximum: BDT {formatCurrency(data.cashInHand)}
               </p>
             </div>
 

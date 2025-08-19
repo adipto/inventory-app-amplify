@@ -283,7 +283,7 @@ const getFilteredTransactions = useCallback(() => {
       Time: transaction.Time,
       ProductName: transaction.ProductName,
       ProductVariation: transaction.ProductVariation,
-      NetProfit: transaction.NetProfit,
+
       // Add type-specific fields
       ...(transaction.type === "retail"
         ? {
@@ -296,6 +296,7 @@ const getFilteredTransactions = useCallback(() => {
           sellingPrice: transaction.SellingPrice_Per_Packet,
           cogs: transaction.COGS_Per_Packet,
         }),
+      Notes: transaction.Notes,
     };
 
     setSelectedTransaction(transactionForEdit);
@@ -363,8 +364,22 @@ const getFilteredTransactions = useCallback(() => {
         // Calculate the transaction amount and net profit that should be reversed
         const quantityNum = parseFloat(transactionToDelete.quantity);
         const sellingPriceNum = parseFloat(transactionToDelete.sellingPrice);
+        const cogsNum = parseFloat(transactionToDelete.cogs);
         const transactionAmount = quantityNum * sellingPriceNum;
-        const netProfitAmount = parseFloat(transactionToDelete.NetProfit);
+        
+        // Calculate net profit dynamically: Selling Price - Total Product Cost
+        let netProfitAmount = 0;
+        if (transactionToDelete.type === "retail") {
+            // For retail: (Quantity * Selling Price) - (Quantity * COGS)
+            netProfitAmount = (quantityNum * sellingPriceNum) - (quantityNum * cogsNum);
+        } else {
+            // For wholesale: (Quantity * Selling Price) - (Quantity * COGS * multiplier)
+            let multiplier = 500; // Default for Cartridge, Folio, Non-judicial stamp
+            if (transactionToDelete.ProductName === "Court Fee") {
+                multiplier = 40 * 500; // Court Fee specific multiplier
+            }
+            netProfitAmount = (quantityNum * sellingPriceNum) - (quantityNum * cogsNum * multiplier);
+        }
         
         console.log('Transaction Deletion - Reversing amounts:', {
           quantity: quantityNum,

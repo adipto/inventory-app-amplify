@@ -24,6 +24,8 @@ function CustomerList() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [lastEvaluatedKeys, setLastEvaluatedKeys] = useState([null]); // Array of start keys for each page
+    const [transactionCounts, setTransactionCounts] = useState({}); // Store transaction counts for customers
+    const [transactionValues, setTransactionValues] = useState({}); // Store transaction values for customers
 
     // Check authentication status
     const checkAuthStatus = async () => {
@@ -73,6 +75,26 @@ function CustomerList() {
             const { items, lastEvaluatedKey } = await fetchCustomersAPI(userToken, limit, startKey);
             console.log("items", items);
             setCustomers(items);
+            
+            // Fetch transaction data for all customers
+            const transactionDataPromises = items.map(async (customer) => {
+                const data = await getCustomerTransactionData(customer.CustomerID, customer.CustomerType);
+                return { customerId: customer.CustomerID, data };
+            });
+            
+            const transactionDataResults = await Promise.all(transactionDataPromises);
+            const newTransactionCounts = {};
+            const newTransactionValues = {};
+            transactionDataResults.forEach(({ customerId, data }) => {
+                newTransactionCounts[customerId] = { totalCount: data.transactionCount };
+                newTransactionValues[customerId] = {
+                    totalSellingPrice: data.totalSellingPrice,
+                    totalNetProfit: data.totalNetProfit
+                };
+            });
+            setTransactionCounts(prev => ({ ...prev, ...newTransactionCounts }));
+            setTransactionValues(prev => ({ ...prev, ...newTransactionValues }));
+            
             // Store the key for the next page
             const newKeys = [...lastEvaluatedKeys];
             newKeys[page] = lastEvaluatedKey || null;
@@ -87,6 +109,112 @@ function CustomerList() {
         }
     };
 
+    // Function to check if customer has any transactions
+    const checkCustomerTransactions = async (customerId, customerType) => {
+        try {
+            const dynamoClient = createDynamoDBClient(userToken);
+            
+            // Only scan the relevant table based on customer type
+            const tableName = customerType === "Retail" ? "Transaction_Retail" : "Transaction_Wholesale";
+            
+            const params = {
+                TableName: tableName,
+                FilterExpression: "#customerId = :customerId",
+                ExpressionAttributeNames: {
+                    "#customerId": "CustomerID"
+                },
+                ExpressionAttributeValues: {
+                    ":customerId": { S: customerId }
+                },
+                Limit: 1 // We only need to know if any exist
+            };
+            
+            const response = await dynamoClient.send(new ScanCommand(params));
+            
+            return {
+                hasTransactions: response.Items && response.Items.length > 0,
+                totalTransactions: response.Items?.length || 0
+            };
+        } catch (error) {
+            console.error("Error checking customer transactions:", error);
+            throw error;
+        }
+    };
+
+    // Function to get transaction count and values for a customer (for display purposes)
+    const getCustomerTransactionData = async (customerId, customerType) => {
+        try {
+            const dynamoClient = createDynamoDBClient(userToken);
+            
+            // Only scan the relevant table based on customer type
+            const tableName = customerType === "Retail" ? "Transaction_Retail" : "Transaction_Wholesale";
+            
+            const params = {
+                TableName: tableName,
+                FilterExpression: "#customerId = :customerId",
+                ExpressionAttributeNames: {
+                    "#customerId": "CustomerID"
+                },
+                ExpressionAttributeValues: {
+                    ":customerId": { S: customerId }
+                }
+            };
+            
+            const response = await dynamoClient.send(new ScanCommand(params));
+            
+            // Calculate totals from transactions
+            let totalSellingPrice = 0;
+            let totalNetProfit = 0;
+            
+            if (response.Items) {
+                response.Items.forEach(item => {
+                    const transaction = unmarshall(item);
+                    
+                    // Calculate selling price based on transaction type
+                    let sellingPricePerUnit = 0;
+                    let quantity = 0;
+                    
+                    if (customerType === "Retail") {
+                        sellingPricePerUnit = parseFloat(transaction.SellingPrice_Per_Pc) || 0;
+                        quantity = parseFloat(transaction.Quantity_Pcs) || 0;
+                    } else {
+                        sellingPricePerUnit = parseFloat(transaction.SellingPrice_Per_Packet) || 0;
+                        quantity = parseFloat(transaction.Quantity_Packets) || 0;
+                    }
+                    
+                    const transactionSellingPrice = sellingPricePerUnit * quantity;
+                    totalSellingPrice += transactionSellingPrice;
+                    
+                    // Calculate net profit dynamically: Selling Price - Total Product Cost
+                    let transactionNetProfit = 0;
+                    if (customerType === "Retail") {
+                        // For retail: (Quantity * Selling Price) - (Quantity * COGS)
+                        const cogsPerUnit = parseFloat(transaction.COGS_Per_Pc) || 0;
+                        transactionNetProfit = (sellingPricePerUnit * quantity) - (cogsPerUnit * quantity);
+                    } else {
+                        // For wholesale: (Quantity * Selling Price) - (Quantity * COGS * multiplier)
+                        const cogsPerUnit = parseFloat(transaction.COGS_Per_Packet) || 0;
+                        let multiplier = 500; // Default for Cartridge, Folio, Non-judicial stamp
+                        if (transaction.ProductName === "Court Fee") {
+                            multiplier = 40 * 500; // Court Fee specific multiplier
+                        }
+                        transactionNetProfit = (sellingPricePerUnit * quantity) - (cogsPerUnit * multiplier * quantity);
+                    }
+                    totalNetProfit += transactionNetProfit;
+                });
+            }
+            
+            return {
+                transactionCount: response.Items?.length || 0,
+                totalSellingPrice: totalSellingPrice,
+                totalNetProfit: totalNetProfit
+            };
+        } catch (error) {
+            console.error("Error getting customer transaction data:", error);
+            return { transactionCount: 0, totalSellingPrice: 0, totalNetProfit: 0 };
+        }
+    };
+
     const handleDelete = async (customer) => {
         const confirmed = window.confirm(
             `Are you sure you want to delete customer "${customer.Name}"?`
@@ -94,6 +222,16 @@ function CustomerList() {
         if (!confirmed) return;
 
         try {
+            // Check if customer has any transactions
+            const transactionCheck = await checkCustomerTransactions(customer.CustomerID, customer.CustomerType);
+            
+            if (transactionCheck.totalTransactions > 0) {
+                alert(
+                    `Cannot delete customer "${customer.Name}". This customer has ${transactionCheck.totalTransactions} transaction(s) in the system (${customer.CustomerType.toLowerCase()} transactions).\n\nPlease delete all associated transactions first before deleting this customer.`
+                );
+                return;
+            }
+
             const dynamoClient = createDynamoDBClient(userToken);
             const deleteCmd = new DeleteItemCommand({
                 TableName: "Customer_Information",
@@ -191,6 +329,16 @@ function CustomerList() {
         setLastEvaluatedKeys([null]);
     };
 
+    // Helper function to format currency
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'BDT',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(amount);
+    };
+
     return (
         <div className="flex h-screen bg-gray-50">
             <Sidebar onSignOut={handleSignOut} />
@@ -272,24 +420,58 @@ function CustomerList() {
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                                Name
-                                            </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                                Type
-                                            </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                                Email
-                                            </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                                Phone
-                                            </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                                Address
-                                            </th>
-                                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                                                Actions
-                                            </th>
+                                                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                 <div className="flex items-center gap-1">
+                                                     <span>Name</span>
+                                                     <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                     </svg>
+                                                 </div>
+                                             </th>
+                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                 <div className="flex items-center gap-1">
+                                                     <span>Type</span>
+                                                     <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                     </svg>
+                                                 </div>
+                                             </th>
+                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                 <div className="flex items-center gap-1">
+                                                     <span>Email</span>
+                                                     <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                     </svg>
+                                                 </div>
+                                             </th>
+                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                 <div className="flex items-center gap-1">
+                                                     <span>Phone</span>
+                                                     <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                     </svg>
+                                                 </div>
+                                             </th>
+                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                 <div className="flex items-center gap-1">
+                                                     <span>Address</span>
+                                                     <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                     </svg>
+                                                 </div>
+                                             </th>
+                                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                                 Transactions
+                                             </th>
+                                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                                 Transaction Value
+                                             </th>
+                                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                                 Net Profit
+                                             </th>
+                                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                                 Actions
+                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -307,6 +489,45 @@ function CustomerList() {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cust.Email || "—"}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cust.PhoneNumber}</td>
                                                 <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={cust.Address}>{cust.Address || "—"}</td>
+                                                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                                     {transactionCounts[cust.CustomerID] ? (
+                                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                             transactionCounts[cust.CustomerID].totalCount > 0 
+                                                                 ? 'bg-orange-100 text-orange-800' 
+                                                                 : 'bg-gray-100 text-gray-600'
+                                                         }`}>
+                                                             {transactionCounts[cust.CustomerID].totalCount} {cust.CustomerType.toLowerCase()}
+                                                         </span>
+                                                     ) : (
+                                                         <span className="text-gray-400">—</span>
+                                                     )}
+                                                 </td>
+                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                                     {transactionValues[cust.CustomerID] ? (
+                                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                             transactionValues[cust.CustomerID].totalSellingPrice > 0 
+                                                                 ? 'bg-green-100 text-green-800' 
+                                                                 : 'bg-gray-100 text-gray-600'
+                                                         }`}>
+                                                             {formatCurrency(transactionValues[cust.CustomerID].totalSellingPrice)}
+                                                         </span>
+                                                     ) : (
+                                                         <span className="text-gray-400">—</span>
+                                                     )}
+                                                 </td>
+                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                                     {transactionValues[cust.CustomerID] ? (
+                                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                             transactionValues[cust.CustomerID].totalNetProfit > 0 
+                                                                 ? 'bg-blue-100 text-blue-800' 
+                                                                 : 'bg-gray-100 text-gray-600'
+                                                         }`}>
+                                                             {formatCurrency(transactionValues[cust.CustomerID].totalNetProfit)}
+                                                         </span>
+                                                     ) : (
+                                                         <span className="text-gray-400">—</span>
+                                                     )}
+                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                     <div className="flex gap-3 justify-center">
                                                         <button
@@ -318,8 +539,17 @@ function CustomerList() {
                                                         </button>
                                                         <button
                                                             onClick={() => handleDelete(cust)}
-                                                            className="text-red-600 hover:text-red-800 transition-colors"
-                                                            title="Delete"
+                                                            className={`transition-colors ${
+                                                                transactionCounts[cust.CustomerID]?.totalCount > 0
+                                                                    ? 'text-gray-400 cursor-not-allowed'
+                                                                    : 'text-red-600 hover:text-red-800'
+                                                            }`}
+                                                            title={
+                                                                transactionCounts[cust.CustomerID]?.totalCount > 0
+                                                                    ? `Cannot delete - ${transactionCounts[cust.CustomerID].totalCount} transaction(s) exist`
+                                                                    : "Delete"
+                                                            }
+                                                            disabled={transactionCounts[cust.CustomerID]?.totalCount > 0}
                                                         >
                                                             <Trash2 size={16} />
                                                         </button>
@@ -416,8 +646,17 @@ function CustomerList() {
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(cust)}
-                                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Delete"
+                                                    className={`p-2 rounded-lg transition-colors ${
+                                                        transactionCounts[cust.CustomerID]?.totalCount > 0
+                                                            ? 'text-gray-400 cursor-not-allowed'
+                                                            : 'text-red-600 hover:bg-red-50'
+                                                    }`}
+                                                    title={
+                                                        transactionCounts[cust.CustomerID]?.totalCount > 0
+                                                            ? `Cannot delete - ${transactionCounts[cust.CustomerID].totalCount} transaction(s) exist`
+                                                            : "Delete"
+                                                    }
+                                                    disabled={transactionCounts[cust.CustomerID]?.totalCount > 0}
                                                 >
                                                     <Trash2 size={18} />
                                                 </button>
@@ -441,6 +680,48 @@ function CustomerList() {
                                                     <span className="break-words">{cust.Address}</span>
                                                 </div>
                                             )}
+                                                                                         <div className="flex items-center text-sm text-gray-600">
+                                                 <span className="mr-2 text-gray-400">📊</span>
+                                                 {transactionCounts[cust.CustomerID] ? (
+                                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                         transactionCounts[cust.CustomerID].totalCount > 0 
+                                                             ? 'bg-orange-100 text-orange-800' 
+                                                             : 'bg-gray-100 text-gray-600'
+                                                     }`}>
+                                                         {transactionCounts[cust.CustomerID].totalCount} {cust.CustomerType.toLowerCase()} transaction(s)
+                                                     </span>
+                                                 ) : (
+                                                     <span className="text-gray-400">No transactions</span>
+                                                 )}
+                                             </div>
+                                             <div className="flex items-center text-sm text-gray-600">
+                                                 <span className="mr-2 text-gray-400">💰</span>
+                                                 {transactionValues[cust.CustomerID] ? (
+                                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                         transactionValues[cust.CustomerID].totalSellingPrice > 0 
+                                                             ? 'bg-green-100 text-green-800' 
+                                                             : 'bg-gray-100 text-gray-600'
+                                                     }`}>
+                                                         {formatCurrency(transactionValues[cust.CustomerID].totalSellingPrice)}
+                                                     </span>
+                                                 ) : (
+                                                     <span className="text-gray-400">No value</span>
+                                                 )}
+                                             </div>
+                                             <div className="flex items-center text-sm text-gray-600">
+                                                 <span className="mr-2 text-gray-400">📈</span>
+                                                 {transactionValues[cust.CustomerID] ? (
+                                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                         transactionValues[cust.CustomerID].totalNetProfit > 0 
+                                                             ? 'bg-blue-100 text-blue-800' 
+                                                             : 'bg-gray-100 text-gray-600'
+                                                     }`}>
+                                                         {formatCurrency(transactionValues[cust.CustomerID].totalNetProfit)}
+                                                     </span>
+                                                 ) : (
+                                                     <span className="text-gray-400">No profit</span>
+                                                 )}
+                                             </div>
                                         </div>
                                     </div>
                                 ))}

@@ -34,7 +34,8 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
     const [quantity, setQuantity] = useState("");
     const [sellingPrice, setSellingPrice] = useState("");
     const [cogs, setCogs] = useState("");
-    const [netProfit, setNetProfit] = useState("");
+    const [notes, setNotes] = useState("");
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
@@ -97,7 +98,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
             setQuantity(transaction.quantity?.toString() || "");
             setSellingPrice(transaction.sellingPrice?.toString() || "");
             setCogs(transaction.cogs?.toString() || "");
-            setNetProfit(transaction.NetProfit?.toString() || "");
+            setNotes(transaction.Notes || "");
 
             // Set customer ID
             setCustomerId(transaction.CustomerID || "");
@@ -144,7 +145,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         setQuantity("");
         setSellingPrice("");
         setCogs("");
-        setNetProfit("");
+        setNotes("");
         setSearchTerm("");
         setSelectedCustomer(null);
         setCustomerId("");
@@ -177,38 +178,7 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         }
     }, [isAuthenticated, isOpen, productType, productCategory]);
 
-    // Calculate net profit when quantity, sellingPrice, or cogs changes
-    useEffect(() => {
-        if (quantity && sellingPrice && cogs) {
-            const quantityNum = parseFloat(quantity);
-            const sellingPriceNum = parseFloat(sellingPrice);
-            const cogsNum = parseFloat(cogs);
 
-            if (!isNaN(quantityNum) && !isNaN(sellingPriceNum) && !isNaN(cogsNum)) {
-                let profit;
-                if (productCategory === "Court Fee") {
-                    if (productType === "Retail") {
-                        // Retail Court Fee: Net Profit = (Quantity_pieces * Selling price per piece) - (COGS_per_court_fee * Quantity_pieces)
-                        profit = (quantityNum * sellingPriceNum) - (cogsNum * quantityNum);
-                    } else {
-                        // Wholesale Court Fee: Net Profit = (Quantity_bundles * Selling price per bundle) - (COGS_per_court_fee * 40 * 500 * Quantity_bundles)
-                        const courtFeesPerBundle = 40 * 500; // 40 court fees per page * 500 pages per bundle
-                        profit = (quantityNum * sellingPriceNum) - (cogsNum * courtFeesPerBundle * quantityNum);
-                    }
-                } else {
-                    if (productType === "Retail") {
-                        // Retail: Net Profit = (Quantity_pcs * Selling price) - (COGS_pcs * Quantity_pcs)
-                        profit = (quantityNum * sellingPriceNum) - (cogsNum * quantityNum);
-                    } else {
-                        // Wholesale: Net Profit = (Quantity_packets * Selling price per packet) - (COGS_per_piece * 500 * Quantity_packets)
-                        const piecesPerPacket = 500;
-                        profit = (quantityNum * sellingPriceNum) - (cogsNum * piecesPerPacket * quantityNum);
-                    }
-                }
-                setNetProfit(profit.toFixed(2));
-            }
-        }
-    }, [quantity, sellingPrice, cogs, productType]);
 
     const fetchCustomers = async () => {
         try {
@@ -329,7 +299,6 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         setQuantity("");
         setSellingPrice("");
         setCogs("");
-        setNetProfit("");
         setAvailableVariations([]);
         
         // Clear customer selection when product type changes
@@ -351,7 +320,6 @@ function AddTransactionModal({ isOpen, onClose, transaction, customerDetails, is
         setProductCategory(e.target.value);
         setProductVariation("");
         setCogs("");
-        setNetProfit("");
         setAvailableVariations([]);
     };
 
@@ -482,26 +450,35 @@ const handleSubmit = async (e) => {
         // FIXED: Proper timezone handling for date/time
         const now = selectedDateTime || new Date();
         
-        // Get user's timezone offset in minutes
-        const timezoneOffset = now.getTimezoneOffset();
+        // Create a date string in local timezone to avoid timezone issues
+        const localDateString = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
         
-        // Adjust for timezone to get local date/time
-        const localDateTime = new Date(now.getTime() - (timezoneOffset * 60000));
+        // Get the local time components directly from the Date object
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const seconds = now.getSeconds().toString().padStart(2, '0');
+        const localTimeString = `${hours}:${minutes}:${seconds}`;
         
-        // Format date as YYYY-MM-DD in local timezone
-        const formattedDate = localDateTime.toISOString().split('T')[0];
+        // Format date as YYYY-MM-DD
+        const formattedDate = localDateString;
         
-        // Format time as HH:MM:SS in local timezone
-        const hours = localDateTime.getHours().toString().padStart(2, '0');
-        const minutes = localDateTime.getMinutes().toString().padStart(2, '0');
-        const seconds = localDateTime.getSeconds().toString().padStart(2, '0');
-        const formattedTime = `${hours}:${minutes}:${seconds}`;
+        // Format time as HH:MM:SS
+        const formattedTime = localTimeString;
 
         console.log('Saving transaction with date/time:', {
             originalDateTime: now,
+            originalDateTimeISO: now.toISOString(),
+            originalDateTimeLocal: now.toLocaleString(),
             formattedDate,
             formattedTime,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            localTime: now.toLocaleString(),
+            getFullYear: now.getFullYear(),
+            getMonth: now.getMonth(),
+            getDate: now.getDate(),
+            getHours: now.getHours(),
+            getMinutes: now.getMinutes(),
+            getSeconds: now.getSeconds()
         });
 
         // Determine which table to use based on product type
@@ -517,7 +494,7 @@ const handleSubmit = async (e) => {
             Time: { S: formattedTime },
             ProductName: { S: productCategory },
             ProductVariation: { S: productVariation },
-            NetProfit: { N: netProfit.toString() },
+            Notes: { S: notes || "-" }, // Add Notes field
             // NEW: Add GSI attributes for future optimization
             GSI_PK: { S: "ALL" }, // Constant partition key for TimestampIndex
             Timestamp: { N: now.getTime().toString() } // Timestamp for sorting
@@ -575,8 +552,19 @@ const handleSubmit = async (e) => {
             const sellingPriceNum = parseFloat(sellingPrice);
             const transactionAmount = quantityNum * sellingPriceNum;
             
-            // Get the net profit amount from the form
-            const netProfitAmount = parseFloat(netProfit);
+            // Calculate net profit dynamically: Selling Price - Total Product Cost
+            let netProfitAmount = 0;
+            if (productType === "Retail") {
+                // For retail: (Quantity * Selling Price) - (Quantity * COGS)
+                netProfitAmount = (quantityNum * sellingPriceNum) - (quantityNum * cogsNum);
+            } else {
+                // For wholesale: (Quantity * Selling Price) - (Quantity * COGS * multiplier)
+                let multiplier = 500; // Default for Cartridge, Folio, Non-judicial stamp
+                if (productCategory === "Court Fee") {
+                    multiplier = 40 * 500; // Court Fee specific multiplier
+                }
+                netProfitAmount = (quantityNum * sellingPriceNum) - (quantityNum * cogsNum * multiplier);
+            }
             
             console.log('Transaction Amount Calculation:', {
                 quantity: quantityNum,
@@ -774,7 +762,12 @@ const handleSubmit = async (e) => {
                                             </div>
                                             <DatePicker
                                                 selected={selectedDateTime}
-                                                onChange={(date) => setSelectedDateTime(date)}
+                                                onChange={(date) => {
+                                                    console.log('DatePicker onChange - Original date:', date);
+                                                    console.log('DatePicker onChange - Date ISO:', date?.toISOString());
+                                                    console.log('DatePicker onChange - Date local:', date?.toLocaleString());
+                                                    setSelectedDateTime(date);
+                                                }}
                                                 dateFormat="yyyy-MM-dd h:mm aa"
                                                 showTimeSelect
                                                 timeFormat="HH:mm"
@@ -937,18 +930,24 @@ const handleSubmit = async (e) => {
                                         />
                                     </div>
 
-                                    {/* Net Profit (auto-calculated) */}
+                                    {/* Notes */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Net Profit
+                                            Notes
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={netProfit}
-                                            readOnly
-                                            className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-700"
+                                        <textarea
+                                            value={notes}
+                                            onChange={(e) => setNotes(e.target.value)}
+                                            placeholder="Enter any additional notes (optional)"
+                                            rows="3"
+                                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Alphanumeric characters only
+                                        </p>
                                     </div>
+
+
 
                                     {/* Submit Button */}
                                     <div className="mt-2">

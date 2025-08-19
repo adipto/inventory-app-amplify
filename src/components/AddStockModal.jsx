@@ -313,8 +313,19 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             // --- Insert into Stock_Entries if this is a new item (not edit) ---
             if (!isEdit) {
                 // Create a proper datetime from date and time inputs
-                const dateTimeString = `${date}T${time}:00.000Z`;
-                const timestamp = new Date(dateTimeString).getTime(); // Unix timestamp in milliseconds
+                // FIXED: Simple and correct timezone handling
+                const dateTimeString = `${date}T${time}:00`;
+                const localDateTime = new Date(dateTimeString);
+                const timestamp = localDateTime.getTime(); // Unix timestamp in milliseconds
+                
+                console.log('Saving stock entry with date/time:', {
+                    originalDate: date,
+                    originalTime: time,
+                    dateTimeString,
+                    localDateTime: localDateTime.toISOString(),
+                    timestamp,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                });
                 
                 const stockTypeKey = `${stockType}#${finalVariation}#${timestamp}`;
                 const stockEntryItem = {

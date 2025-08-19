@@ -11,6 +11,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const [deleteEntry, setDeleteEntry] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [error, setError] = useState("");
+    const [isAdmin, setIsAdmin] = useState(false);
     
     // Editing states for additional fields
     const [editingEntry, setEditingEntry] = useState(null);
@@ -18,8 +19,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const [editForm, setEditForm] = useState({
         seriesStartNumber: "",
         seriesEndNumber: "",
-        chalalNumber: "",
-        chalalDate: ""
+        chalanNumber: "",
+        chalanDate: ""
     });
     
     // Pagination states
@@ -34,9 +35,34 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         loadEntries
     }));
 
+    // Check if user is admin
+    const checkAdminStatus = async () => {
+        try {
+            const session = await fetchAuthSession();
+            const groups = session.tokens?.accessToken?.payload?.["cognito:groups"] || [];
+            const adminGroups = ["admin", "Admin", "ADMIN"];
+            const userIsAdmin = groups.some((group) => adminGroups.includes(group));
+            
+            console.log('Admin check:', {
+                groups: groups,
+                adminGroups: adminGroups,
+                userIsAdmin: userIsAdmin
+            });
+            
+            setIsAdmin(userIsAdmin);
+        } catch (error) {
+            console.error("Error checking admin status:", error);
+            setIsAdmin(false);
+        }
+    };
+
     // Load entries on component mount and when page changes
     useEffect(() => {
-        loadEntries(1, null, true); // Reset to first page
+        const initializeComponent = async () => {
+            await checkAdminStatus();
+            await loadEntries(1, null, true); // Reset to first page
+        };
+        initializeComponent();
     }, []);
 
     const loadEntries = async (page = 1, startKey = null, resetPagination = false) => {
@@ -105,7 +131,19 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     };
 
     const filteredEntries = entries.filter(entry => {
-        const matchesDate = filterDate ? entry.date === filterDate : true;
+        let matchesDate = true;
+        if (filterDate) {
+            // Convert filter date to start and end of day timestamps
+            const filterDateObj = new Date(filterDate);
+            const startOfDay = new Date(filterDateObj.getFullYear(), filterDateObj.getMonth(), filterDateObj.getDate());
+            const endOfDay = new Date(filterDateObj.getFullYear(), filterDateObj.getMonth(), filterDateObj.getDate() + 1);
+            const startTimestamp = startOfDay.getTime();
+            const endTimestamp = endOfDay.getTime();
+            
+            // Check if entry timestamp falls within the day
+            const entryTimestamp = entry.timestamp || entry.Timestamp;
+            matchesDate = entryTimestamp >= startTimestamp && entryTimestamp < endTimestamp;
+        }
         const matchesType = filterItemType ? entry.itemType === filterItemType : true;
         return matchesDate && matchesType;
     });
@@ -113,6 +151,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const itemTypes = Array.from(new Set(entries.map(e => e.itemType)));
 
     const handleDeleteClick = (entry) => {
+        console.log('Delete clicked for entry:', entry);
         setDeleteEntry(entry);
         setError("");
     };
@@ -122,8 +161,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         setEditForm({
             seriesStartNumber: entry.seriesStartNumber || "",
             seriesEndNumber: entry.seriesEndNumber || "",
-            chalalNumber: entry.chalalNumber || "",
-            chalalDate: entry.chalalDate || ""
+            chalanNumber: entry.chalanNumber || "",
+            chalanDate: entry.chalanDate || ""
         });
         setError("");
     };
@@ -133,10 +172,18 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         setEditForm({
             seriesStartNumber: "",
             seriesEndNumber: "",
-            chalalNumber: "",
-            chalalDate: ""
+            chalanNumber: "",
+            chalanDate: ""
         });
         setError("");
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            handleEditSave();
+        } else if (e.key === 'Escape') {
+            handleEditCancel();
+        }
     };
 
     const handleEditSave = async () => {
@@ -198,16 +245,16 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                  }
              }
 
-            if (editForm.chalalNumber !== "") {
+            if (editForm.chalanNumber !== "") {
                 updateExpressions.push("#cn = :cn");
-                expressionAttributeNames["#cn"] = "ChalalNumber";
-                expressionAttributeValues[":cn"] = { S: editForm.chalalNumber };
+                expressionAttributeNames["#cn"] = "ChalanNumber";
+                expressionAttributeValues[":cn"] = { S: editForm.chalanNumber };
             }
 
-            if (editForm.chalalDate !== "") {
+            if (editForm.chalanDate !== "") {
                 updateExpressions.push("#cd = :cd");
-                expressionAttributeNames["#cd"] = "ChalalDate";
-                expressionAttributeValues[":cd"] = { S: editForm.chalalDate };
+                expressionAttributeNames["#cd"] = "ChalanDate";
+                expressionAttributeValues[":cd"] = { S: editForm.chalanDate };
             }
 
             if (updateExpressions.length === 0) {
@@ -219,8 +266,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             const updateCommand = new UpdateItemCommand({
                 TableName: "Stock_Entries",
                 Key: {
-                    Date: { S: editingEntry.date },
-                    StockType_VariationName_Timestamp: { S: editingEntry.StockType_VariationName_Timestamp }
+                    GSI_PK: { S: editingEntry.GSI_PK || editingEntry.gsiPk },
+                    Timestamp: { N: editingEntry.timestamp.toString() }
                 },
                 UpdateExpression: `SET ${updateExpressions.join(", ")}`,
                 ExpressionAttributeNames: expressionAttributeNames,
@@ -236,8 +283,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                         ...entry,
                         seriesStartNumber: editForm.seriesStartNumber || entry.seriesStartNumber,
                         seriesEndNumber: editForm.seriesEndNumber || entry.seriesEndNumber,
-                        chalalNumber: editForm.chalalNumber || entry.chalalNumber,
-                        chalalDate: editForm.chalalDate || entry.chalalDate
+                        chalanNumber: editForm.chalanNumber || entry.chalanNumber,
+                        chalanDate: editForm.chalanDate || entry.chalanDate
                     };
                 }
                 return entry;
@@ -248,8 +295,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             setEditForm({
                 seriesStartNumber: "",
                 seriesEndNumber: "",
-                chalalNumber: "",
-                chalalDate: ""
+                chalanNumber: "",
+                chalanDate: ""
             });
 
         } catch (err) {
@@ -295,21 +342,137 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
              });
             
             // 1. Delete from Stock_Entries
-            const entryDate = deleteEntry.date || deleteEntry.Date;
-            const entrySortKey = deleteEntry.StockType_VariationName_Timestamp;
+            console.log('Attempting to delete entry with keys:', {
+                StockType_VariationName_Timestamp: deleteEntry.StockType_VariationName_Timestamp,
+                entryData: deleteEntry
+            });
             
-            if (!entrySortKey) {
-                setError("Failed to delete entry. Sort key is missing.");
+            if (!deleteEntry.StockType_VariationName_Timestamp) {
+                setError("Failed to delete entry. Key information is missing.");
                 setIsDeleting(false);
                 return;
             }
             
-            await deleteStockItem("Stock_Entries", entryDate, entrySortKey, token);
+            // Use the new key structure for deletion
+            const { DynamoDBClient, DeleteItemCommand } = await import("@aws-sdk/client-dynamodb");
+            const { fromCognitoIdentityPool } = await import("@aws-sdk/credential-provider-cognito-identity");
+            
+            const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+            const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID;
+            
+            const credentials = fromCognitoIdentityPool({
+                identityPoolId: IDENTITY_POOL_ID,
+                logins: {
+                    [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: token,
+                },
+                clientConfig: { region: REGION },
+            });
+
+            const client = new DynamoDBClient({
+                region: REGION,
+                credentials,
+            });
+
+            // Use the correct primary key for deletion
+            const stockTypeKey = deleteEntry.StockType_VariationName_Timestamp;
+            const entryDate = deleteEntry.date;
+            
+            console.log('Attempting to delete with keys:', {
+                Date: entryDate,
+                StockType_VariationName_Timestamp: stockTypeKey
+            });
+            
+            if (!stockTypeKey || !entryDate) {
+                throw new Error("Missing required keys for deletion");
+            }
+            
+            // Start with the most likely key combination
+            const deleteCommand = new DeleteItemCommand({
+                TableName: "Stock_Entries",
+                Key: {
+                    Date: { S: entryDate },
+                    StockType_VariationName_Timestamp: { S: stockTypeKey }
+                }
+            });
+            console.log('Using Date + StockType_VariationName_Timestamp as key');
+
+            console.log('Sending delete command:', JSON.stringify(deleteCommand, null, 2));
+            
+            try {
+                await client.send(deleteCommand);
+                console.log('Successfully deleted from Stock_Entries table');
+            } catch (deleteError) {
+                console.error('Error deleting from Stock_Entries:', deleteError);
+                
+                // If the first key combination failed, try alternative key structures
+                if (deleteError.name === 'ValidationException' && deleteError.message.includes('key element does not match the schema')) {
+                    console.log('Trying alternative key structures...');
+                    
+                    // Try different key combinations
+                    const keyCombinations = [
+                        {
+                            name: 'Date + ItemType',
+                            key: {
+                                Date: { S: entryDate },
+                                ItemType: { S: deleteEntry.itemType }
+                            }
+                        },
+                        {
+                            name: 'Date + VariationName',
+                            key: {
+                                Date: { S: entryDate },
+                                VariationName: { S: deleteEntry.variationName }
+                            }
+                        },
+                        {
+                            name: 'ItemType + VariationName',
+                            key: {
+                                ItemType: { S: deleteEntry.itemType },
+                                VariationName: { S: deleteEntry.variationName }
+                            }
+                        },
+                        {
+                            name: 'StockType_VariationName_Timestamp only',
+                            key: {
+                                StockType_VariationName_Timestamp: { S: stockTypeKey }
+                            }
+                        }
+                    ];
+                    
+                    for (const combo of keyCombinations) {
+                        try {
+                            console.log(`Trying key combination: ${combo.name}`);
+                            const altDeleteCommand = new DeleteItemCommand({
+                                TableName: "Stock_Entries",
+                                Key: combo.key
+                            });
+                            await client.send(altDeleteCommand);
+                            console.log(`Successfully deleted using ${combo.name}`);
+                            return; // Success, exit the function
+                        } catch (altError) {
+                            console.log(`Failed with ${combo.name}:`, altError.message);
+                            continue;
+                        }
+                    }
+                    
+                    throw new Error('All key combinations failed. Please check the table schema.');
+                }
+                
+                throw new Error(`Failed to delete from Stock_Entries: ${deleteError.message}`);
+            }
             
             // 2. Subtract quantity from main stock table
             const tableName = deleteEntry.isWholesale ? "Wholesale_Stock" : "Retail_Stock";
             const mainItemType = deleteEntry.itemType || deleteEntry.ItemType;
             const mainVariationName = deleteEntry.variationName || deleteEntry.VariationName;
+            
+            console.log('Attempting to deduct from main stock:', {
+                tableName,
+                mainItemType,
+                mainVariationName,
+                quantityToDeduct: stockTransactionDetails.quantityRemoved,
+                isWholesale: deleteEntry.isWholesale
+            });
             
             if (!mainItemType || !mainVariationName) {
                 setError("Failed to delete entry. Main stock key is missing.");
@@ -317,13 +480,19 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                 return;
             }
             
-            await deductFromMainStock({
-                tableName,
-                itemType: mainItemType,
-                variationName: mainVariationName,
-                quantityToDeduct: stockTransactionDetails.quantityRemoved,
-                token
-            });
+            try {
+                await deductFromMainStock({
+                    tableName,
+                    itemType: mainItemType,
+                    variationName: mainVariationName,
+                    quantityToDeduct: stockTransactionDetails.quantityRemoved,
+                    token
+                });
+                console.log('Successfully deducted from main stock table');
+            } catch (deductError) {
+                console.error('Error deducting from main stock:', deductError);
+                throw new Error(`Failed to deduct from main stock: ${deductError.message}`);
+            }
             
                          // --- Update Capital Management After Stock Deletion ---
              try {
@@ -350,7 +519,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             if (onRefresh) await onRefresh();
             
         } catch (err) {
-            setError("Failed to delete entry. " + (err.message || ""));
+            console.error("Error in handleDeleteConfirm:", err);
+            setError("Failed to delete entry: " + (err.message || "Unknown error occurred"));
         } finally {
             setIsDeleting(false);
         }
@@ -436,22 +606,92 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                         </div>
                     </div>
                     
-                    <div className="overflow-x-auto">
+                    {/* Desktop Table View */}
+                    <div className="hidden lg:block overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Type</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Variation</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (Pcs)</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (Packets)</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Date & Time</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Item Type</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Variation</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Quantity (Pcs)</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Quantity (Packets)</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Unit Price</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Series Start</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Series End</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chalal Number</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chalal Date</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Series Start</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Series End</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Chalan Number</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
+                                            <span>Chalan Date</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
@@ -459,13 +699,31 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                 {filteredEntries.length > 0 ? (
                                     filteredEntries.map(entry => (
                                         <tr key={entry.id} className="hover:bg-gray-50">
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.date}</td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {entry.timestampDisplay}
+                                            </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.itemType}</td>
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.variationName}</td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantityPcs || '-'}</td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.quantityPackets || '-'}</td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">TK {entry.unitPrice.toFixed(2)}</td>
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">TK {entry.totalValue.toFixed(2)}</td>
+                                                                                          <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                                                  {entry.quantityPcs || '-'}
+                                                </span>
+                                              </td>
+                                              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                                                  {entry.quantityPackets || '-'}
+                                                </span>
+                                              </td>
+                                                                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        BDT {entry.unitPrice.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                        BDT {entry.totalValue.toFixed(2)}
+                      </span>
+                    </td>
                                             
                                             {/* Series Start Number */}
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -476,9 +734,15 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                                         onChange={(e) => setEditForm({...editForm, seriesStartNumber: e.target.value})}
                                                         className="w-24 px-2 py-1 border rounded text-sm"
                                                         placeholder="Start"
+                                                        onKeyDown={handleKeyDown}
                                                     />
                                                 ) : (
-                                                    <span>{entry.seriesStartNumber || '-'}</span>
+                                                    <span 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.seriesStartNumber || '-'}
+                                                    </span>
                                                 )}
                                             </td>
                                             
@@ -491,43 +755,57 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                                         onChange={(e) => setEditForm({...editForm, seriesEndNumber: e.target.value})}
                                                         className="w-24 px-2 py-1 border rounded text-sm"
                                                         placeholder="End"
+                                                        onKeyDown={handleKeyDown}
                                                     />
                                                 ) : (
-                                                    <span>{entry.seriesEndNumber || '-'}</span>
+                                                    <span 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.seriesEndNumber || '-'}
+                                                    </span>
                                                 )}
                                             </td>
                                             
-                                            {/* Chalal Number */}
+                                            {/* Chalan Number */}
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {editingEntry?.id === entry.id ? (
                                                     <input
                                                         type="text"
-                                                        value={editForm.chalalNumber}
-                                                        onChange={(e) => setEditForm({...editForm, chalalNumber: e.target.value})}
+                                                        value={editForm.chalanNumber}
+                                                        onChange={(e) => setEditForm({...editForm, chalanNumber: e.target.value})}
                                                         className="w-24 px-2 py-1 border rounded text-sm"
-                                                        placeholder="Chalal #"
+                                                        placeholder="Chalan #"
+                                                        onKeyDown={handleKeyDown}
                                                     />
                                                 ) : (
-                                                    <span>{entry.chalalNumber || '-'}</span>
+                                                    <span 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.chalanNumber || '-'}
+                                                    </span>
                                                 )}
                                             </td>
                                             
-                                            {/* Chalal Date */}
+                                            {/* Chalan Date */}
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {editingEntry?.id === entry.id ? (
                                                     <input
                                                         type="date"
-                                                        value={editForm.chalalDate}
-                                                        onChange={(e) => setEditForm({...editForm, chalalDate: e.target.value})}
+                                                        value={editForm.chalanDate}
+                                                        onChange={(e) => setEditForm({...editForm, chalanDate: e.target.value})}
                                                         className="w-32 px-2 py-1 border rounded text-sm"
+                                                        onKeyDown={handleKeyDown}
                                                     />
                                                 ) : (
-                                                    <span>{entry.chalalDate || '-'}</span>
+                                                    <span 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.chalanDate || '-'}
+                                                    </span>
                                                 )}
-                                            </td>
-                                            
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {entry.timestampDisplay}
                                             </td>
                                             
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -553,6 +831,85 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                                         </>
                                                     ) : (
                                                         <>
+                                                            {isAdmin ? (
+                                                                <>
+                                                                    <button 
+                                                                        className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50" 
+                                                                        title="Edit" 
+                                                                        onClick={() => handleEditClick(entry)}
+                                                                        disabled={isDeleting}
+                                                                    >
+                                                                        ✎
+                                                                    </button>
+                                                <button 
+                                                    className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50 disabled:opacity-50" 
+                                                    title="Delete" 
+                                                    onClick={() => handleDeleteClick(entry)}
+                                                    disabled={isDeleting}
+                                                >
+                                                                        {isDeleting && deleteEntry?.id === entry.id ? "Deleting..." : "🗑"}
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <button 
+                                                                    className="text-gray-400 p-1 rounded-full cursor-not-allowed" 
+                                                                    title="Admin only" 
+                                                                    disabled
+                                                                >
+                                                                    👁
+                                                </button>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="12" className="px-6 py-12 text-center text-gray-500">
+                                            {filterDate || filterItemType ? "No stock entries found matching the filters." : "No stock entries found."}
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="lg:hidden space-y-4">
+                        {filteredEntries.length > 0 ? (
+                            filteredEntries.map(entry => (
+                                <div key={entry.id} className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                                    {/* Header with Date & Actions */}
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="text-sm text-gray-500">
+                                            {entry.timestampDisplay}
+                                        </div>
+                                        <div className="flex space-x-1">
+                                            {editingEntry?.id === entry.id ? (
+                                                <>
+                                                    <button 
+                                                        className="text-green-600 hover:text-green-900 p-1 rounded-full hover:bg-green-50 disabled:opacity-50" 
+                                                        title="Save" 
+                                                        onClick={handleEditSave}
+                                                        disabled={isSaving}
+                                                    >
+                                                        {isSaving ? "Saving..." : "✓"}
+                                                    </button>
+                                                    <button 
+                                                        className="text-gray-600 hover:text-gray-900 p-1 rounded-full hover:bg-gray-50" 
+                                                        title="Cancel" 
+                                                        onClick={handleEditCancel}
+                                                        disabled={isSaving}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {isAdmin ? (
+                                                        <>
                                                             <button 
                                                                 className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50" 
                                                                 title="Edit" 
@@ -570,20 +927,159 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                                                 {isDeleting && deleteEntry?.id === entry.id ? "Deleting..." : "🗑"}
                                                             </button>
                                                         </>
+                                                    ) : (
+                                                        <button 
+                                                            className="text-gray-400 p-1 rounded-full cursor-not-allowed" 
+                                                            title="Admin only" 
+                                                            disabled
+                                                        >
+                                                            👁
+                                                        </button>
                                                     )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Main Content */}
+                                    <div className="space-y-2">
+                                        {/* Item Type & Variation */}
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="font-medium text-gray-900">{entry.itemType}</div>
+                                                <div className="text-sm text-gray-600">{entry.variationName}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Quantities */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <span className="text-xs text-gray-500">Quantity (Pcs)</span>
+                                                <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                                                    {entry.quantityPcs || '-'}
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="13" className="px-6 py-12 text-center text-gray-500">
-                                            {filterDate || filterItemType ? "No stock entries found matching the filters." : "No stock entries found."}
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                            </div>
+                                            <div>
+                                                <span className="text-xs text-gray-500">Quantity (Packets)</span>
+                                                <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                                                    {entry.quantityPackets || '-'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Pricing */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <span className="text-xs text-gray-500">Unit Price</span>
+                                                <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                    BDT {entry.unitPrice.toFixed(2)}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span className="text-xs text-gray-500">Total Value</span>
+                                                <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                                    BDT {entry.totalValue.toFixed(2)}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Editable Fields */}
+                                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                                            {/* Series Start */}
+                                            <div>
+                                                <span className="text-xs text-gray-500">Series Start</span>
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.seriesStartNumber}
+                                                        onChange={(e) => setEditForm({...editForm, seriesStartNumber: e.target.value})}
+                                                        className="w-full mt-1 px-2 py-1 border rounded text-sm"
+                                                        placeholder="Start"
+                                                        onKeyDown={handleKeyDown}
+                                                    />
+                                                ) : (
+                                                    <div 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded text-sm mt-1"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.seriesStartNumber || '-'}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Series End */}
+                                            <div>
+                                                <span className="text-xs text-gray-500">Series End</span>
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.seriesEndNumber}
+                                                        onChange={(e) => setEditForm({...editForm, seriesEndNumber: e.target.value})}
+                                                        className="w-full mt-1 px-2 py-1 border rounded text-sm"
+                                                        placeholder="End"
+                                                        onKeyDown={handleKeyDown}
+                                                    />
+                                                ) : (
+                                                    <div 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded text-sm mt-1"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.seriesEndNumber || '-'}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Chalan Number */}
+                                            <div>
+                                                <span className="text-xs text-gray-500">Chalan Number</span>
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.chalanNumber}
+                                                        onChange={(e) => setEditForm({...editForm, chalanNumber: e.target.value})}
+                                                        className="w-full mt-1 px-2 py-1 border rounded text-sm"
+                                                        placeholder="Chalan #"
+                                                        onKeyDown={handleKeyDown}
+                                                    />
+                                                ) : (
+                                                    <div 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded text-sm mt-1"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.chalanNumber || '-'}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Chalan Date */}
+                                            <div>
+                                                <span className="text-xs text-gray-500">Chalan Date</span>
+                                                {editingEntry?.id === entry.id ? (
+                                                    <input
+                                                        type="date"
+                                                        value={editForm.chalanDate}
+                                                        onChange={(e) => setEditForm({...editForm, chalanDate: e.target.value})}
+                                                        className="w-full mt-1 px-2 py-1 border rounded text-sm"
+                                                        onKeyDown={handleKeyDown}
+                                                    />
+                                                ) : (
+                                                    <div 
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded text-sm mt-1"
+                                                        onClick={() => handleEditClick(entry)}
+                                                    >
+                                                        {entry.chalanDate || '-'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-12 text-gray-500">
+                                {filterDate || filterItemType ? "No stock entries found matching the filters." : "No stock entries found."}
+                            </div>
+                        )}
                     </div>
                     
                     {/* Pagination */}
@@ -592,8 +1088,14 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                     {/* Delete Confirm Modal */}
                     <DeleteConfirmModal
                         isOpen={!!deleteEntry}
-                        onClose={() => setDeleteEntry(null)}
-                        onConfirm={handleDeleteConfirm}
+                        onClose={() => {
+                            console.log('Delete modal closed');
+                            setDeleteEntry(null);
+                        }}
+                        onConfirm={() => {
+                            console.log('Delete confirmed for entry:', deleteEntry);
+                            handleDeleteConfirm();
+                        }}
                         isLoading={isDeleting}
                     />
                     

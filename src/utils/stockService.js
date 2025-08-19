@@ -352,7 +352,7 @@ export const fetchStockEntries = async (token, page = 1, limit = 10, lastEvaluat
         
         const entries = (response.Items || []).map((item) => {
             return {
-                id: `${item.Date?.S}-${item.ItemType?.S}-${item.VariationName?.S}-${Math.random().toString(36).slice(2, 8)}`,
+                id: `${item.Timestamp?.N || Date.now()}-${item.ItemType?.S}-${item.VariationName?.S}-${Math.random().toString(36).slice(2, 8)}`,
                 date: item.Date?.S || "",
                 itemType: item.ItemType?.S || "",
                 variationName: item.VariationName?.S || "",
@@ -364,13 +364,14 @@ export const fetchStockEntries = async (token, page = 1, limit = 10, lastEvaluat
                     : Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Pcs?.N || 0),
                 isWholesale: !!item.Quantity_Packets,
                 StockType_VariationName_Timestamp: item.StockType_VariationName_Timestamp?.S,
+                GSI_PK: item.GSI_PK?.S,
                 timestamp: item.Timestamp?.N ? Number(item.Timestamp.N) : null,
                 timestampDisplay: item.Timestamp?.N ? new Date(Number(item.Timestamp.N)).toLocaleString() : 'N/A',
                 // Additional editable fields
                 seriesStartNumber: item.SeriesStartNumber?.S || item.SeriesStartNumber?.N ? (item.SeriesStartNumber.S || item.SeriesStartNumber.N.toString()) : null,
                 seriesEndNumber: item.SeriesEndNumber?.S || item.SeriesEndNumber?.N ? (item.SeriesEndNumber.S || item.SeriesEndNumber.N.toString()) : null,
-                chalalNumber: item.ChalalNumber?.S || null,
-                chalalDate: item.ChalalDate?.S || null
+                chalanNumber: item.ChalanNumber?.S || null,
+                chalanDate: item.ChalanDate?.S || null
             };
         });
 

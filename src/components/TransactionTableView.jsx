@@ -40,7 +40,59 @@ function TransactionTableView({
   // Format currency helper
   const formatCurrency = (amount) => {
     if (amount === undefined || amount === null) return "-";
-    return parseFloat(amount).toFixed(2);
+    return `BDT ${parseFloat(amount).toFixed(2)}`;
+  };
+
+  // Calculate total product cost
+  const calculateTotalProductCost = (transaction) => {
+    const quantity = transaction.quantity;
+    const cogs = transaction.cogs;
+    const productType = transaction.type;
+    const productName = transaction.ProductName;
+    
+    if (productType === "retail") {
+      // For retail: quantity * COGS for all product types
+      return quantity * cogs;
+    } else {
+      // For wholesale
+      if (productName === "Court Fee") {
+        // Court Fee: quantity * COGS * 40 * 500
+        return quantity * cogs * 40 * 500;
+      } else {
+        // Cartridge, Folio, Non-judicial stamp: quantity * COGS * 500
+        return quantity * cogs * 500;
+      }
+    }
+  };
+
+  // Calculate total amount charged
+  const calculateTotalAmountCharged = (transaction) => {
+    const quantity = transaction.quantity;
+    const sellingPrice = transaction.sellingPrice;
+    return quantity * sellingPrice;
+  };
+
+  // Calculate net profit dynamically
+  const calculateNetProfit = (transaction) => {
+    const quantity = transaction.quantity;
+    const sellingPrice = transaction.sellingPrice;
+    const cogs = transaction.cogs;
+    const productType = transaction.type;
+    const productName = transaction.ProductName;
+    
+    if (productType === "retail") {
+      // For retail: Net Profit = (Quantity × Selling Price) - (Quantity × COGS)
+      return (quantity * sellingPrice) - (quantity * cogs);
+    } else {
+      // For wholesale
+      if (productName === "Court Fee") {
+        // Court Fee: Net Profit = (Quantity × Selling Price) - (Quantity × COGS × 40 × 500)
+        return (quantity * sellingPrice) - (quantity * cogs * 40 * 500);
+      } else {
+        // Other products: Net Profit = (Quantity × Selling Price) - (Quantity × COGS × 500)
+        return (quantity * sellingPrice) - (quantity * cogs * 500);
+      }
+    }
   };
 
   // Calculate pagination stats
@@ -48,7 +100,7 @@ function TransactionTableView({
   const indexOfFirstTransaction = indexOfLastTransaction - transactionsPerPage;
   const totalTransactions = displayTransactions.length;
   const totalProfit = displayTransactions
-    .reduce((sum, tx) => sum + parseFloat(tx.NetProfit || 0), 0)
+    .reduce((sum, tx) => sum + calculateNetProfit(tx), 0)
     .toFixed(2);
 
   // Render empty state
@@ -90,129 +142,201 @@ function TransactionTableView({
 
   // Render desktop table
   const renderDesktopTable = () => (
-    <div className="hidden md:block overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Date
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Time
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Customer Name
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Mobile Number
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Type
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Product
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Variation
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Quantity
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Selling Price
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Total Amount
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              COGS
-            </th>
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Net Profit
-            </th>
-            {isAdmin && (
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {displayTransactions.map((transaction) => {
-            const customer = customerDetails[transaction.CustomerID] || {};
-            return (
-              <tr key={transaction.TransactionID} className="hover:bg-gray-50">
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate(transaction.Date)}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {transaction.Time || "-"}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {customer.Name || "Unknown"}
+    <div className="hidden md:block">
+      <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+          <table className="w-full min-w-[1200px]">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+              <tr>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-20">
+                  <div className="flex items-center gap-1">
+                    <span>Date/Time</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
                   </div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {customer.PhoneNumber || "-"}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      transaction.type === "retail"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-indigo-100 text-indigo-800"
-                    }`}
-                  >
-                    {transaction.type === "retail" ? "Retail" : "Wholesale"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {transaction.ProductName}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {transaction.ProductVariation}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {transaction.quantity}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatCurrency(transaction.sellingPrice)}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatCurrency(transaction.quantity * transaction.sellingPrice)}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatCurrency(transaction.cogs)}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {formatCurrency(transaction.NetProfit)}
-                </td>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
+                  <div className="flex items-center gap-1">
+                    <span>Customer</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-16">
+                  <div className="flex items-center gap-1">
+                    <span>Type</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-40">
+                  <div className="flex items-center gap-1">
+                    <span>Product</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-20">
+                  <div className="flex items-center gap-1">
+                    <span>Qty</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
+                  <div className="flex items-center gap-1">
+                    <span>COGS</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
+                  <div className="flex items-center gap-1">
+                    <span>Notes</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
+                  <div className="flex items-center gap-1">
+                    <span>Price</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-28">
+                  <span>Total</span>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-28">
+                  <span>Cost</span>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
+                  <span>Profit</span>
+                </th>
                 {isAdmin && (
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => onModifyTransaction(transaction)}
-                        className="text-yellow-500 hover:text-yellow-700 hover:bg-yellow-50 p-1 rounded"
-                        title="Edit Transaction"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => onDeleteTransaction(transaction)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
-                        title="Delete Transaction"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
+                  <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-20">
+                    <span>Actions</span>
+                  </th>
                 )}
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody className="bg-white">
+              {displayTransactions.map((transaction) => {
+                const customer = customerDetails[transaction.CustomerID] || {};
+                return (
+                  <tr key={transaction.TransactionID} className="hover:bg-gray-50 border-b border-gray-100">
+                    <td className="px-3 py-3 text-sm text-gray-600">
+                      <div className="flex flex-col">
+                        <span className="font-medium">{formatDate(transaction.Date)}</span>
+                        <span className="text-xs text-gray-400">{transaction.Time || "-"}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-col">
+                        <div className="text-sm font-medium text-gray-900 truncate max-w-28">
+                          {customer.Name || "Unknown"}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate max-w-28">
+                          {customer.PhoneNumber || "-"}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          transaction.type === "retail"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-indigo-100 text-indigo-800"
+                        }`}
+                      >
+                        {transaction.type === "retail" ? "R" : "W"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-gray-600">
+                      <div className="flex flex-col">
+                        <span className="font-medium truncate max-w-36">{transaction.ProductName}</span>
+                        <span className="text-xs text-gray-400 truncate max-w-36">{transaction.ProductVariation}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-center">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                        {transaction.quantity}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-right">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                        {formatCurrency(transaction.cogs)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-gray-600">
+                      <div className="max-w-32 truncate" title={transaction.Notes || "-"}>
+                        {transaction.Notes || "-"}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-right">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                        {formatCurrency(transaction.sellingPrice)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-right">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {formatCurrency(calculateTotalAmountCharged(transaction))}
+                      </span>
+                    </td>
+                                         <td className="px-3 py-3 text-sm text-right">
+                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                         {formatCurrency(calculateTotalProductCost(transaction))}
+                       </span>
+                     </td>
+                    <td className="px-3 py-3 text-sm font-semibold text-right">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        calculateNetProfit(transaction) >= 0 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {formatCurrency(calculateNetProfit(transaction))}
+                      </span>
+                    </td>
+                    {isAdmin && (
+                      <td className="px-3 py-3 text-sm text-gray-500">
+                        <div className="flex space-x-1">
+                          <button
+                            onClick={() => onModifyTransaction(transaction)}
+                            className="text-yellow-500 hover:text-yellow-700 hover:bg-yellow-50 p-1 rounded transition-colors"
+                            title="Edit Transaction"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={() => onDeleteTransaction(transaction)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                            title="Delete Transaction"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Custom Scrollbar Indicator */}
+        <div className="h-2 bg-gray-100 border-t border-gray-200">
+          <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full mx-1 my-0.5 opacity-60 hover:opacity-100 transition-opacity cursor-pointer"></div>
+        </div>
+      </div>
     </div>
   );
 
@@ -280,33 +404,55 @@ function TransactionTableView({
                 </div>
               </div>
 
+              {/* Notes */}
+              {transaction.Notes && transaction.Notes !== "-" && (
+                <div className="bg-yellow-50 rounded-lg p-3">
+                  <div className="flex items-start">
+                    <span className="text-sm font-medium text-gray-700 mr-2">📝 Notes:</span>
+                    <span className="text-sm text-gray-900 flex-1">
+                      {transaction.Notes}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Financial Information */}
-              <div className="bg-blue-50 rounded-lg p-3 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-gray-700">Selling Price:</span>
-                  <span className="text-sm font-semibold text-blue-900">
-                    ${formatCurrency(transaction.sellingPrice)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-gray-700">Total Amount:</span>
-                  <span className="text-sm font-semibold text-blue-900">
-                    ${formatCurrency(transaction.quantity * transaction.sellingPrice)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-gray-700">COGS:</span>
-                  <span className="text-sm text-gray-900">
-                    ${formatCurrency(transaction.cogs)}
-                  </span>
-                </div>
-                <div className="flex justify-between border-t border-blue-200 pt-2">
-                  <span className="text-sm font-semibold text-gray-700">Net Profit:</span>
-                  <span className="text-sm font-bold text-green-600">
-                    ${formatCurrency(transaction.NetProfit)}
-                  </span>
-                </div>
-              </div>
+                <div className="bg-blue-50 rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Selling Price:</span>
+                    <span className="text-sm font-semibold bg-green-100 text-green-800 px-2 py-1 rounded">
+                      {formatCurrency(transaction.sellingPrice)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Total Amount Charged:</span>
+                    <span className="text-sm font-semibold bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                      {formatCurrency(calculateTotalAmountCharged(transaction))}
+                    </span>
+                  </div>
+                                   <div className="flex justify-between">
+                     <span className="text-sm font-medium text-gray-700">Total Product Cost:</span>
+                     <span className="text-sm font-semibold bg-red-100 text-red-800 px-2 py-1 rounded">
+                       {formatCurrency(calculateTotalProductCost(transaction))}
+                     </span>
+                   </div>
+                                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">COGS(Per Piece):</span>
+                    <span className="text-sm bg-red-100 text-red-800 px-2 py-1 rounded">
+                      {formatCurrency(transaction.cogs)}
+                    </span>
+                  </div>
+                 <div className="flex justify-between border-t border-blue-200 pt-2">
+                   <span className="text-sm font-semibold text-gray-700">Net Profit:</span>
+                                      <span className={`text-sm font-bold px-2 py-1 rounded ${
+                        calculateNetProfit(transaction) >= 0 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                      {formatCurrency(calculateNetProfit(transaction))}
+                    </span>
+                 </div>
+               </div>
 
               {/* Admin Actions */}
               {isAdmin && (
@@ -448,12 +594,12 @@ function TransactionTableView({
                 of <span className="font-medium">{totalTransactions}</span>{" "}
                 transactions
               </p>
-              <p className="text-sm text-gray-700 mt-1 text-center sm:text-left">
-                Total Profit:{" "}
-                <span className="font-medium text-green-600">
-                  ${totalProfit}
-                </span>
-              </p>
+                             <p className="text-sm text-gray-700 mt-1 text-center sm:text-left">
+                 Total Profit:{" "}
+                 <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded">
+                   BDT {totalProfit}
+                 </span>
+               </p>
             </div>
 
             {/* Pagination Controls */}
