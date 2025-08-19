@@ -274,16 +274,33 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                 return;
             }
 
+            // Debug logging to see the actual structure
+            console.log('Editing entry structure:', editingEntry);
+            console.log('Key values being used:', {
+                Date: editingEntry.date || editingEntry.Date,
+                StockType_VariationName_Timestamp: editingEntry.StockType_VariationName_Timestamp
+            });
+
+            // Validate that we have the required key fields
+            if (!editingEntry.date && !editingEntry.Date) {
+                throw new Error("Missing Date field for update");
+            }
+            if (!editingEntry.StockType_VariationName_Timestamp) {
+                throw new Error("Missing StockType_VariationName_Timestamp field for update");
+            }
+
             const updateCommand = new UpdateItemCommand({
                 TableName: "Stock_Entries",
                 Key: {
-                    GSI_PK: { S: editingEntry.GSI_PK || editingEntry.gsiPk },
-                    Timestamp: { N: editingEntry.timestamp.toString() }
+                    Date: { S: editingEntry.date || editingEntry.Date },
+                    StockType_VariationName_Timestamp: { S: editingEntry.StockType_VariationName_Timestamp }
                 },
                 UpdateExpression: `SET ${updateExpressions.join(", ")}`,
                 ExpressionAttributeNames: expressionAttributeNames,
                 ExpressionAttributeValues: expressionAttributeValues
             });
+
+            console.log('Update command:', JSON.stringify(updateCommand, null, 2));
 
             await client.send(updateCommand);
 
@@ -300,6 +317,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                 }
                 return entry;
             });
+
+            console.log('Updated entry in local state:', updatedEntries.find(e => e.id === editingEntry.id));
 
             setEntries(updatedEntries);
             setEditingEntry(null);
