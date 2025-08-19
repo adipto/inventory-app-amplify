@@ -270,10 +270,25 @@ function StockPage() {
   };
 
   const handleEditItem = (item) => {
+    // Determine stock type based on the actual item data, not just the active tab
+    let stockType;
+    if (activeTab === "retail") {
+      stockType = "Retail";
+    } else if (activeTab === "wholesale") {
+      stockType = "Wholesale";
+    } else {
+      // For "all" tab, determine if it's retail or wholesale based on which array it belongs to
+      const isRetailItem = retailStock.some(retailItem => 
+        retailItem.itemType === item.itemType && 
+        retailItem.variationName === item.variationName
+      );
+      stockType = isRetailItem ? "Retail" : "Wholesale";
+    }
+
     setItemToEdit({
       itemType: item.itemType,
       variation: item.variationName,
-      stockType: activeTab === "retail" ? "Retail" : "Wholesale",
+      stockType: stockType,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lowStockThreshold: item.lowStockThreshold,
@@ -284,9 +299,25 @@ function StockPage() {
   };
 
   const handleDeleteItem = (item) => {
+    // Determine the correct table name based on whether the item is retail or wholesale
+    let tableName;
+    if (activeTab === "retail") {
+      tableName = "Retail_Stock";
+    } else if (activeTab === "wholesale") {
+      tableName = "Wholesale_Stock";
+    } else {
+      // For "all" tab, determine if it's retail or wholesale based on which array it belongs to
+      const isRetailItem = retailStock.some(retailItem => 
+        retailItem.itemType === item.itemType && 
+        retailItem.variationName === item.variationName
+      );
+      tableName = isRetailItem ? "Retail_Stock" : "Wholesale_Stock";
+    }
+    
     setItemToDelete({
       itemType: item.itemType,
       variationName: item.variationName,
+      tableName: tableName
     });
     setIsDeleteModalOpen(true);
     setShowActionsMenu(null);
@@ -301,7 +332,7 @@ function StockPage() {
       const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
 
       await deleteStockItem(
-        currentTableName,
+        itemToDelete.tableName,
         itemToDelete.itemType,
         itemToDelete.variationName,
         idToken
@@ -985,7 +1016,6 @@ const handleAllStockRefresh = async () => {
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={confirmDeleteItem}
-        itemDetails={itemToDelete}
       />
     </div>
   );

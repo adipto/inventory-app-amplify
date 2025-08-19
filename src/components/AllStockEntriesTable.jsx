@@ -494,22 +494,23 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                 throw new Error(`Failed to deduct from main stock: ${deductError.message}`);
             }
             
-                         // --- Update Capital Management After Stock Deletion ---
-             try {
-                 const { updateAfterStockDeletion } = await import("../utils/capitalManagementService");
-                 
-                 console.log('Calling updateAfterStockDeletion with:', {
-                     stockValueRemoved: stockTransactionDetails.stockValueRemoved,
-                     isLastEntry: stockTransactionDetails.isLastEntry
-                 });
-                 
-                 // Pass the stock transaction details for proper capital management update
-                 await updateAfterStockDeletion(token, stockTransactionDetails.stockValueRemoved, stockTransactionDetails.isLastEntry);
-                 
-                 console.log('Capital management update completed successfully');
-             } catch (capitalError) {
-                 console.error("Error updating capital management:", capitalError);
-             }
+                                     // --- Update Capital Management After Stock Deletion ---
+            try {
+                const { updateAfterStockDeletion } = await import("../utils/capitalManagementService");
+                
+                console.log('Calling updateAfterStockDeletion with:', {
+                    stockValueRemoved: stockTransactionDetails.stockValueRemoved,
+                    isLastEntry: stockTransactionDetails.isLastEntry,
+                    deletedEntryData: deleteEntry
+                });
+                
+                // Pass the stock transaction details and deleted entry data for proper capital management update
+                await updateAfterStockDeletion(token, stockTransactionDetails.stockValueRemoved, stockTransactionDetails.isLastEntry, deleteEntry);
+                
+                console.log('Capital management update completed successfully');
+            } catch (capitalError) {
+                console.error("Error updating capital management:", capitalError);
+            }
             
             setDeleteEntry(null);
             
@@ -637,6 +638,14 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                     </th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         <div className="flex items-center gap-1">
+                                            <span>Stock Type</span>
+                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center gap-1">
                                             <span>Quantity (Pcs)</span>
                                             <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -704,6 +713,15 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                             </td>
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.itemType}</td>
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{entry.variationName}</td>
+                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                    entry.stockType === 'Wholesale' 
+                                                        ? 'bg-orange-100 text-orange-800' 
+                                                        : 'bg-green-100 text-green-800'
+                                                }`}>
+                                                    {entry.stockType || '-'}
+                                                </span>
+                                            </td>
                                                                                           <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
                                                   {entry.quantityPcs || '-'}
@@ -948,6 +966,15 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                             <div>
                                                 <div className="font-medium text-gray-900">{entry.itemType}</div>
                                                 <div className="text-sm text-gray-600">{entry.variationName}</div>
+                                            </div>
+                                            <div>
+                                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                    entry.stockType === 'Wholesale' 
+                                                        ? 'bg-orange-100 text-orange-800' 
+                                                        : 'bg-green-100 text-green-800'
+                                                }`}>
+                                                    {entry.stockType || '-'}
+                                                </span>
                                             </div>
                                         </div>
 

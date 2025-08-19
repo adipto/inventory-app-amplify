@@ -496,7 +496,7 @@ function CustomerList() {
                                                                  ? 'bg-orange-100 text-orange-800' 
                                                                  : 'bg-gray-100 text-gray-600'
                                                          }`}>
-                                                             {transactionCounts[cust.CustomerID].totalCount} {cust.CustomerType.toLowerCase()}
+                                                             {transactionCounts[cust.CustomerID].totalCount} {transactionCounts[cust.CustomerID].totalCount === 1 ? 'transaction' : 'transactions'}
                                                          </span>
                                                      ) : (
                                                          <span className="text-gray-400">—</span>
@@ -688,7 +688,7 @@ function CustomerList() {
                                                              ? 'bg-orange-100 text-orange-800' 
                                                              : 'bg-gray-100 text-gray-600'
                                                      }`}>
-                                                         {transactionCounts[cust.CustomerID].totalCount} {cust.CustomerType.toLowerCase()} transaction(s)
+                                                         {transactionCounts[cust.CustomerID].totalCount} {transactionCounts[cust.CustomerID].totalCount === 1 ? 'transaction' : 'transactions'}
                                                      </span>
                                                  ) : (
                                                      <span className="text-gray-400">No transactions</span>

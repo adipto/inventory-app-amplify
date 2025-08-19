@@ -362,7 +362,13 @@ const getFilteredTransactions = useCallback(() => {
         const { updateAfterTransaction } = await import("../utils/capitalManagementService");
         
         // Calculate the transaction amount and net profit that should be reversed
-        const quantityNum = parseFloat(transactionToDelete.quantity);
+        // Get quantity from the correct field based on transaction type
+        let quantityNum;
+        if (transactionToDelete.type === "retail") {
+            quantityNum = parseFloat(transactionToDelete.Quantity_Pcs);
+        } else {
+            quantityNum = parseFloat(transactionToDelete.Quantity_Packets);
+        }
         const sellingPriceNum = parseFloat(transactionToDelete.sellingPrice);
         const cogsNum = parseFloat(transactionToDelete.cogs);
         const transactionAmount = quantityNum * sellingPriceNum;
@@ -388,8 +394,9 @@ const getFilteredTransactions = useCallback(() => {
           netProfitAmount: netProfitAmount
         });
         
-        // Pass negative values to reverse the transaction
-        await updateAfterTransaction(idToken, -transactionAmount, -netProfitAmount);
+        // Pass negative values to reverse the transaction, including quantity and transaction type
+        const transactionType = transactionToDelete.type === "retail" ? "Retail" : "Wholesale";
+        await updateAfterTransaction(idToken, -transactionAmount, -netProfitAmount, quantityNum, transactionType);
       } catch (capitalError) {
         console.error("Error updating capital management:", capitalError);
       }

@@ -327,10 +327,27 @@ const TopCustomerComponent = () => {
                                     <h3 className="font-semibold text-gray-900">
                                         {customer.customerDetails?.Name || 'Unknown Customer'}
                                     </h3>
-                                    <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-                                        <span>ID: {customer.customerId}</span>
-                                        <span>Type: {customer.customerDetails?.CustomerType || 'N/A'}</span>
-                                        <span>Phone: {customer.customerDetails?.PhoneNumber || 'N/A'}</span>
+                                    <div className="flex flex-wrap items-center gap-3 text-sm mt-2">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-1.5"></span>
+                                            ID: {customer.customerId}
+                                        </span>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            customer.customerDetails?.CustomerType === 'Wholesale' 
+                                                ? 'bg-orange-100 text-orange-800' 
+                                                : 'bg-green-100 text-green-800'
+                                        }`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                                                customer.customerDetails?.CustomerType === 'Wholesale' 
+                                                    ? 'bg-orange-400' 
+                                                    : 'bg-green-400'
+                                            }`}></span>
+                                            Type: {customer.customerDetails?.CustomerType || 'N/A'}
+                                        </span>
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                            <span className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-1.5"></span>
+                                            📞 Phone: {customer.customerDetails?.PhoneNumber || 'N/A'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -339,11 +356,9 @@ const TopCustomerComponent = () => {
                                     TK {customer.totalRevenue.toLocaleString()}
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                    {customer.totalTransactions} transactions
+                                    {customer.totalTransactions} {customer.totalTransactions === 1 ? 'transaction' : 'transactions'}
                                 </div>
-                                <div className="text-xs text-gray-500">
-                                    {customer.retailTransactions} retail, {customer.wholesaleTransactions} wholesale
-                                </div>
+
                                 {customer.lastTransactionDate && (
                                     <div className="text-xs text-gray-500">
                                         Last: {new Date(customer.lastTransactionDate).toLocaleDateString()}

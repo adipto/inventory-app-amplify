@@ -33,6 +33,8 @@ export const initializeCapitalManagement = async (token) => {
          CashInHand: { N: defaultInvestment }, // Start with initial capital as cash
          TotalStockValue: { N: "0" },
          TotalProfit: { N: "0" },
+         TotalRetailQuantity: { N: "0" }, // All-time total retail quantity
+         TotalWholesaleQuantity: { N: "0" }, // All-time total wholesale quantity
          LastUpdated: { S: new Date().toISOString() }
        };
 
@@ -266,8 +268,19 @@ export const calculateTotalRevenue = async (token) => {
 };
 
 // Update capital management after a new transaction (stock selling event)
-export const updateAfterTransaction = async (token, transactionAmount = null, netProfitAmount = null) => {
+export const updateAfterTransaction = async (token, transactionAmount = null, netProfitAmount = null, quantity = null, transactionType = null) => {
   try {
+    console.log('=== CAPITAL MANAGEMENT UPDATE DEBUG ===');
+    console.log('Input parameters:', {
+      transactionAmount: transactionAmount,
+      netProfitAmount: netProfitAmount,
+      quantity: quantity,
+      transactionType: transactionType,
+      netProfitAmountType: typeof netProfitAmount,
+      netProfitAmountIsNull: netProfitAmount === null,
+      netProfitAmountIsZero: netProfitAmount === 0
+    });
+    
     const currentData = await getCapitalManagementData(token);
     const currentStockValue = await calculateCurrentStockValue(token);
     
@@ -276,6 +289,8 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
     let totalStockValue = parseFloat(currentData.TotalStockValue?.N || "0");
     let totalInvestment = parseFloat(currentData.totalinvestment?.N || "0");
     let totalProfit = parseFloat(currentData.TotalProfit?.N || "0");
+    let totalRetailQuantity = parseFloat(currentData.TotalRetailQuantity?.N || "0");
+    let totalWholesaleQuantity = parseFloat(currentData.TotalWholesaleQuantity?.N || "0");
     
     // For stock selling event (positive transactionAmount) or transaction deletion (negative transactionAmount):
     // 1. Cash in Hand = C.H + total stock selling price (or - for deletion)
@@ -284,6 +299,7 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
     // 4. Total Profit = T.P + net profit from transaction (or - for deletion)
     
     if (transactionAmount !== null) {
+      console.log('Taking main transaction path (transactionAmount !== null)');
       // Use the actual transaction amount from the transaction modal
       const totalStockSellingPrice = Math.abs(transactionAmount);
       const isDeletion = transactionAmount < 0;
@@ -309,10 +325,21 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
           console.log(`Total profit decreased by transaction amount (fallback): ${totalStockSellingPrice.toFixed(2)}`);
         }
         
+        // 5. Update quantity tracking for deletion
+        if (quantity !== null && transactionType !== null) {
+          if (transactionType === "Retail") {
+            totalRetailQuantity -= quantity;
+            console.log(`Total retail quantity decreased by ${quantity} to ${totalRetailQuantity}`);
+          } else if (transactionType === "Wholesale") {
+            totalWholesaleQuantity -= quantity;
+            console.log(`Total wholesale quantity decreased by ${quantity} to ${totalWholesaleQuantity}`);
+          }
+        }
+        
         console.log(`Transaction deletion detected: ${totalStockSellingPrice.toFixed(2)} worth of stock transaction reversed`);
         console.log(`Cash in hand decreased from ${(cashInHand + totalStockSellingPrice).toFixed(2)} to ${cashInHand.toFixed(2)}`);
         console.log(`Total stock value updated to: ${totalStockValue.toFixed(2)}`);
-        console.log(`Total profit decreased from ${(totalProfit + totalStockSellingPrice).toFixed(2)} to ${totalProfit.toFixed(2)}`);
+        console.log(`Total profit decreased from ${(totalProfit + Math.abs(netProfitAmount || totalStockSellingPrice)).toFixed(2)} to ${totalProfit.toFixed(2)}`);
       } else {
         // Transaction creation - normal selling logic
         // 1. Cash in Hand = C.H + total stock selling price
@@ -325,21 +352,42 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
         // totalInvestment remains the same
         
         // 4. Total Profit = T.P + net profit from transaction
-        if (netProfitAmount !== null && netProfitAmount > 0) {
-          totalProfit += netProfitAmount;
-          console.log(`Total profit increased by net profit: ${netProfitAmount.toFixed(2)}`);
+        console.log('Profit calculation path check:', {
+          netProfitAmount: netProfitAmount,
+          netProfitAmountIsNull: netProfitAmount !== null,
+          willUseNetProfit: netProfitAmount !== null
+        });
+        
+        if (netProfitAmount !== null) {
+          totalProfit += Math.abs(netProfitAmount);
+          console.log(`Total profit increased by net profit: ${Math.abs(netProfitAmount).toFixed(2)}`);
         } else {
           // Fallback: use transaction amount if net profit not provided
           totalProfit += totalStockSellingPrice;
           console.log(`Total profit increased by transaction amount (fallback): ${totalStockSellingPrice.toFixed(2)}`);
         }
         
+        // 5. Update quantity tracking for creation
+        console.log('Quantity tracking check:', { quantity, transactionType, quantityNotNull: quantity !== null, transactionTypeNotNull: transactionType !== null });
+        if (quantity !== null && transactionType !== null) {
+          if (transactionType === "Retail") {
+            totalRetailQuantity += quantity;
+            console.log(`Total retail quantity increased by ${quantity} to ${totalRetailQuantity}`);
+          } else if (transactionType === "Wholesale") {
+            totalWholesaleQuantity += quantity;
+            console.log(`Total wholesale quantity increased by ${quantity} to ${totalWholesaleQuantity}`);
+          }
+        } else {
+          console.log('Quantity tracking skipped - quantity or transactionType is null');
+        }
+        
         console.log(`Stock selling detected: ${totalStockSellingPrice.toFixed(2)} worth of stock sold`);
         console.log(`Cash in hand increased from ${(cashInHand - totalStockSellingPrice).toFixed(2)} to ${cashInHand.toFixed(2)}`);
         console.log(`Total stock value updated to: ${totalStockValue.toFixed(2)}`);
-        console.log(`Total profit increased from ${(totalProfit - totalStockSellingPrice).toFixed(2)} to ${totalProfit.toFixed(2)}`);
+        console.log(`Total profit increased from ${(totalProfit - (netProfitAmount || totalStockSellingPrice)).toFixed(2)} to ${totalProfit.toFixed(2)}`);
       }
     } else {
+      console.log('Taking fallback path (transactionAmount === null)');
       // Fallback: Calculate the change in stock value (for backward compatibility)
       const stockValueChange = currentStockValue - totalStockValue;
       
@@ -356,13 +404,30 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
         // 3. Total Investment = T.I (unchanged)
         // totalInvestment remains the same
         
-        // 4. Total Profit = T.P + total stock selling price
-        totalProfit += totalStockSellingPrice;
+        // 4. Total Profit = T.P + net profit (use netProfitAmount if available, otherwise use stock selling price as fallback)
+        if (netProfitAmount !== null) {
+          totalProfit += Math.abs(netProfitAmount);
+          console.log(`Total profit increased by net profit (fallback): ${Math.abs(netProfitAmount).toFixed(2)}`);
+        } else {
+          totalProfit += totalStockSellingPrice;
+          console.log(`Total profit increased by stock selling price (fallback): ${totalStockSellingPrice.toFixed(2)}`);
+        }
+        
+        // 5. Update quantity tracking for creation (fallback)
+        if (quantity !== null && transactionType !== null) {
+          if (transactionType === "Retail") {
+            totalRetailQuantity += quantity;
+            console.log(`Total retail quantity increased by ${quantity} to ${totalRetailQuantity} (fallback)`);
+          } else if (transactionType === "Wholesale") {
+            totalWholesaleQuantity += quantity;
+            console.log(`Total wholesale quantity increased by ${quantity} to ${totalWholesaleQuantity} (fallback)`);
+          }
+        }
         
         console.log(`Stock selling detected (fallback): ${totalStockSellingPrice.toFixed(2)} worth of stock sold`);
         console.log(`Cash in hand increased from ${(cashInHand - totalStockSellingPrice).toFixed(2)} to ${cashInHand.toFixed(2)}`);
         console.log(`Total stock value decreased from ${(totalStockValue + totalStockSellingPrice).toFixed(2)} to ${totalStockValue.toFixed(2)}`);
-        console.log(`Total profit increased from ${(totalProfit - totalStockSellingPrice).toFixed(2)} to ${totalProfit.toFixed(2)}`);
+        console.log(`Total profit increased from ${(totalProfit - (netProfitAmount || totalStockSellingPrice)).toFixed(2)} to ${totalProfit.toFixed(2)}`);
       } else {
         // No stock change, just update total stock value
         totalStockValue = currentStockValue;
@@ -383,7 +448,9 @@ export const updateAfterTransaction = async (token, transactionAmount = null, ne
     const updates = {
       TotalStockValue: { N: totalStockValue.toString() },
       CashInHand: { N: cashInHand.toString() },
-      TotalProfit: { N: totalProfit.toString() }
+      TotalProfit: { N: totalProfit.toString() },
+      TotalRetailQuantity: { N: totalRetailQuantity.toString() },
+      TotalWholesaleQuantity: { N: totalWholesaleQuantity.toString() }
     };
 
     await updateCapitalManagementData(token, updates);
@@ -411,8 +478,11 @@ export const updateAfterStockAddition = async (token) => {
     // For stock buying event:
     // 1. Cash in Hand = C.H - total stock price
     // 2. Total Stock Value = T.S + total stock price  
-    // 3. Total Investment = max(T.S, T.I)
+    // 3. Total Investment = Total Supply value (current stock value)
     // 4. Total Profit = T.P (unchanged)
+    
+    // Store the previous Total Investment value before any updates
+    const previousTotalInvestment = totalInvestment;
     
     if (stockValueChange > 0) {
       // Stock was bought - apply buying logic
@@ -424,8 +494,17 @@ export const updateAfterStockAddition = async (token) => {
       // 2. Total Stock Value = T.S + total stock price
       totalStockValue = currentStockValue;
       
-      // 3. Total Investment = max(T.S, T.I)
-      totalInvestment = Math.max(totalStockValue, totalInvestment);
+      // 3. Total Investment - only update if current stock value is greater than current total investment
+      if (currentStockValue > previousTotalInvestment) {
+        totalInvestment = currentStockValue;
+        console.log(`Total Investment updated from ${previousTotalInvestment.toFixed(2)} to ${totalInvestment.toFixed(2)} (this stock entry triggered the update)`);
+        
+        // Update the latest stock entry to store the previous Total Investment value
+        await updateLatestStockEntryWithPreviousInvestment(token, previousTotalInvestment);
+      } else {
+        totalInvestment = previousTotalInvestment; // Keep the current total investment
+        console.log(`Total Investment unchanged: ${totalInvestment.toFixed(2)} (this stock entry did not trigger the update)`);
+      }
       
       // 4. Total Profit = T.P (unchanged)
       // totalProfit remains the same
@@ -433,7 +512,6 @@ export const updateAfterStockAddition = async (token) => {
       console.log(`Stock buying detected: ${totalStockPrice.toFixed(2)} worth of stock added`);
       console.log(`Cash in hand decreased from ${(cashInHand + totalStockPrice).toFixed(2)} to ${cashInHand.toFixed(2)}`);
       console.log(`Total stock value increased from ${(totalStockValue - totalStockPrice).toFixed(2)} to ${totalStockValue.toFixed(2)}`);
-      console.log(`Total investment updated to: ${totalInvestment.toFixed(2)}`);
     } else {
       // No stock change, just update total stock value
       totalStockValue = currentStockValue;
@@ -442,6 +520,7 @@ export const updateAfterStockAddition = async (token) => {
     console.log('Stock Addition (Stock Buying) Debug:', {
       previousCashInHand: parseFloat(currentData.CashInHand?.N || "0").toFixed(2),
       previousTotalStockValue: parseFloat(currentData.TotalStockValue?.N || "0").toFixed(2),
+      previousTotalInvestment: previousTotalInvestment.toFixed(2),
       currentStockValue: currentStockValue.toFixed(2),
       stockValueChange: stockValueChange.toFixed(2),
       totalStockPrice: stockValueChange > 0 ? stockValueChange.toFixed(2) : "0.00",
@@ -464,8 +543,69 @@ export const updateAfterStockAddition = async (token) => {
   }
 };
 
+// Update the latest stock entry to store the previous Total Investment value
+const updateLatestStockEntryWithPreviousInvestment = async (token, previousTotalInvestment) => {
+  try {
+    const { DynamoDBClient, UpdateItemCommand, QueryCommand } = await import("@aws-sdk/client-dynamodb");
+    const { fromCognitoIdentityPool } = await import("@aws-sdk/credential-provider-cognito-identity");
+
+    const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+    const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID;
+
+    const credentials = fromCognitoIdentityPool({
+      identityPoolId: IDENTITY_POOL_ID,
+      logins: {
+        [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: token,
+      },
+      clientConfig: { region: REGION },
+    });
+
+    const client = new DynamoDBClient({
+      region: REGION,
+      credentials,
+    });
+
+    // Query the latest stock entry using the GSI
+    const queryCommand = new QueryCommand({
+      TableName: "Stock_Entries",
+      IndexName: "TimestampIndex",
+      KeyConditionExpression: "GSI_PK = :pk",
+      ExpressionAttributeValues: {
+        ":pk": { S: "STOCK_ENTRIES" }
+      },
+      ScanIndexForward: false, // Get latest first (descending by timestamp)
+      Limit: 1, // Get only the latest entry
+    });
+
+    const response = await client.send(queryCommand);
+    
+    if (response.Items && response.Items.length > 0) {
+      const latestEntry = response.Items[0];
+      
+      // Update the latest entry with the previous Total Investment value
+      const updateCommand = new UpdateItemCommand({
+        TableName: "Stock_Entries",
+        Key: {
+          Date: latestEntry.Date,
+          StockType_VariationName_Timestamp: latestEntry.StockType_VariationName_Timestamp
+        },
+        UpdateExpression: "SET PreviousTotalInvestment = :pti",
+        ExpressionAttributeValues: {
+          ":pti": { N: previousTotalInvestment.toString() }
+        }
+      });
+
+      await client.send(updateCommand);
+      console.log(`Updated latest stock entry with PreviousTotalInvestment: ${previousTotalInvestment.toFixed(2)}`);
+    }
+  } catch (error) {
+    console.error("Error updating latest stock entry with previous Total Investment:", error);
+    // Don't throw error to avoid breaking the main flow
+  }
+};
+
 // Update capital management after stock deletion (reverse stock buying event)
-export const updateAfterStockDeletion = async (token, stockValueRemoved = null, isLastEntry = false) => {
+export const updateAfterStockDeletion = async (token, stockValueRemoved = null, isLastEntry = false, deletedEntryData = null) => {
   try {
     const currentData = await getCapitalManagementData(token);
     const currentStockValue = await calculateCurrentStockValue(token);
@@ -483,7 +623,8 @@ export const updateAfterStockDeletion = async (token, stockValueRemoved = null, 
       currentTotalProfit: totalProfit.toFixed(2),
       currentStockValue: currentStockValue.toFixed(2),
       stockValueRemoved: stockValueRemoved ? stockValueRemoved.toFixed(2) : "null",
-      isLastEntry: isLastEntry
+      isLastEntry: isLastEntry,
+      deletedEntryData: deletedEntryData
     });
     
     // Check if this is the last entry being deleted
@@ -514,8 +655,16 @@ export const updateAfterStockDeletion = async (token, stockValueRemoved = null, 
       const previousTotalStockValue = totalStockValue;
       totalStockValue = currentStockValue;
       
-      // 3. Total Investment = T.I (unchanged)
-      // totalInvestment remains the same
+      // 3. Check if this deleted entry had a PreviousTotalInvestment value
+      // If so, restore the Total Investment to that previous value
+      if (deletedEntryData && deletedEntryData.PreviousTotalInvestment) {
+        const previousTotalInvestment = parseFloat(deletedEntryData.PreviousTotalInvestment);
+        totalInvestment = previousTotalInvestment;
+        console.log(`Restoring Total Investment to previous value: ${previousTotalInvestment.toFixed(2)} (this entry triggered the original update)`);
+      } else {
+        // 3. Total Investment remains unchanged (this entry did not trigger the original update)
+        console.log(`Total Investment unchanged: ${totalInvestment.toFixed(2)} (this entry did not trigger the original update)`);
+      }
       
       // 4. Total Profit = T.P (unchanged)
       // totalProfit remains the same
@@ -523,7 +672,7 @@ export const updateAfterStockDeletion = async (token, stockValueRemoved = null, 
       console.log(`Stock deletion detected: ${totalStockPrice.toFixed(2)} worth of stock removed`);
       console.log(`Cash in hand increased from ${previousCashInHand.toFixed(2)} to ${cashInHand.toFixed(2)}`);
       console.log(`Total stock value decreased from ${previousTotalStockValue.toFixed(2)} to ${totalStockValue.toFixed(2)}`);
-      console.log(`Total investment remains: ${totalInvestment.toFixed(2)}`);
+      console.log(`Total investment updated to: ${totalInvestment.toFixed(2)}`);
       console.log(`Total profit remains: ${totalProfit.toFixed(2)}`);
     } else {
       // Fallback: Calculate the change in stock value (for backward compatibility)
@@ -541,8 +690,15 @@ export const updateAfterStockDeletion = async (token, stockValueRemoved = null, 
         const previousTotalStockValue = totalStockValue;
         totalStockValue = currentStockValue;
         
-        // 3. Total Investment = T.I (unchanged)
-        // totalInvestment remains the same
+        // 3. Check if this deleted entry had a PreviousTotalInvestment value
+        if (deletedEntryData && deletedEntryData.PreviousTotalInvestment) {
+          const previousTotalInvestment = parseFloat(deletedEntryData.PreviousTotalInvestment);
+          totalInvestment = previousTotalInvestment;
+          console.log(`Restoring Total Investment to previous value (fallback): ${previousTotalInvestment.toFixed(2)} (this entry triggered the original update)`);
+        } else {
+          // 3. Total Investment remains unchanged (this entry did not trigger the original update)
+          console.log(`Total Investment unchanged (fallback): ${totalInvestment.toFixed(2)} (this entry did not trigger the original update)`);
+        }
         
         // 4. Total Profit = T.P (unchanged)
         // totalProfit remains the same
@@ -604,8 +760,8 @@ export const refreshCapitalManagement = async (token) => {
       // 2. Total Stock Value = T.S + total stock price
       totalStockValue = currentStockValue;
       
-      // 3. Total Investment = max(T.S, T.I)
-      totalInvestment = Math.max(totalStockValue, totalInvestment);
+      // 3. Total Investment = Total Supply value (current stock value)
+      totalInvestment = totalStockValue;
       
       // 4. Total Profit = T.P (unchanged)
       // totalProfit remains the same

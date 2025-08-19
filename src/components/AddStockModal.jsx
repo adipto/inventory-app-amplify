@@ -29,10 +29,10 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         return now.toTimeString().slice(0, 5);
     });
     const [predefinedVariations, setPredefinedVariations] = useState({
-        "Non-judicial stamp": [],
-        "Cartridge Paper": [],
-        "Folio Paper": [],
-        "Court Fee": []
+        "Non-judicial stamp": { retail: [], wholesale: [] },
+        "Cartridge Paper": { retail: [], wholesale: [] },
+        "Folio Paper": { retail: [], wholesale: [] },
+        "Court Fee": { retail: [], wholesale: [] }
     });
     const [isLoadingVariations, setIsLoadingVariations] = useState(false);
     const [customVariationError, setCustomVariationError] = useState("");
@@ -230,10 +230,14 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             setDate(editItem.date || new Date().toISOString().split('T')[0]);
             setTime(editItem.time || new Date().toTimeString().slice(0, 5));
 
-            // Handle custom variation if needed
+            // Handle custom variation if needed - only check if variations are loaded
             if (
                 editItem.variation &&
-                !predefinedVariations[editItem.itemType]?.includes(editItem.variation)
+                predefinedVariations[editItem.itemType] &&
+                Array.isArray(predefinedVariations[editItem.itemType].retail) &&
+                Array.isArray(predefinedVariations[editItem.itemType].wholesale) &&
+                !predefinedVariations[editItem.itemType].retail.includes(editItem.variation) &&
+                !predefinedVariations[editItem.itemType].wholesale.includes(editItem.variation)
             ) {
                 setVariation("__custom__");
                 setCustomVariation(editItem.variation);
@@ -243,7 +247,25 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             setOriginalItem(null);
             resetFields();
         }
-    }, [isOpen, editItem]);
+    }, [isOpen, editItem, predefinedVariations]);
+
+    // Handle variation selection after predefined variations are loaded
+    useEffect(() => {
+        if (isEdit && editItem && editItem.variation && predefinedVariations[editItem.itemType]) {
+            const itemTypeVariations = predefinedVariations[editItem.itemType];
+            const retailVariations = itemTypeVariations.retail || [];
+            const wholesaleVariations = itemTypeVariations.wholesale || [];
+            
+            // Check if the variation exists in either retail or wholesale arrays
+            if (retailVariations.includes(editItem.variation) || wholesaleVariations.includes(editItem.variation)) {
+                setVariation(editItem.variation);
+                setCustomVariation("");
+            } else {
+                setVariation("__custom__");
+                setCustomVariation(editItem.variation);
+            }
+        }
+    }, [isEdit, editItem, predefinedVariations]);
 
     const resetFields = () => {
         setItemType("Non-judicial stamp");
@@ -327,7 +349,9 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
                 });
                 
-                const stockTypeKey = `${stockType}#${finalVariation}#${timestamp}`;
+                // Add a unique suffix to prevent overwrites when entries are created in the same second
+                const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+                const stockTypeKey = `${stockType}#${finalVariation}#${timestamp}#${uniqueSuffix}`;
                 const stockEntryItem = {
                     Date: { S: date },
                     StockType_VariationName_Timestamp: { S: stockTypeKey },
@@ -336,6 +360,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                     StockType: { S: stockType },
                     UnitPrice: { N: unitPrice.toString() },
                     Timestamp: { N: timestamp.toString() }, // Single timestamp field
+                    UniqueSuffix: { S: uniqueSuffix }, // Store the unique suffix
                     GSI_PK: { S: "STOCK_ENTRIES" } // Partition key for GSI
                 };
                 
@@ -561,6 +586,38 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         });
 
         await client.send(command);
+    };
+
+    // Check if all required fields are completed
+    const isFormValid = () => {
+        const requiredFields = [
+            stockType,
+            itemType,
+            variation,
+            quantity,
+            lowStockThreshold,
+            date,
+            time
+        ];
+        
+        // Check if all required fields have values
+        const allFieldsFilled = requiredFields.every(field => 
+            field !== null && field !== undefined && field !== ""
+        );
+        
+        // Check if quantity is a valid number greater than 0
+        const validQuantity = quantity && !isNaN(parseFloat(quantity)) && parseFloat(quantity) > 0;
+        
+        // Check if low stock threshold is a valid number greater than 0
+        const validLowStockThreshold = lowStockThreshold && !isNaN(parseFloat(lowStockThreshold)) && parseFloat(lowStockThreshold) > 0;
+        
+        // Check if date is valid (not empty and not in the future)
+        const validDate = date && date !== "";
+        
+        // Check if time is valid (not empty)
+        const validTime = time && time !== "";
+        
+        return allFieldsFilled && validQuantity && validLowStockThreshold && validDate && validTime;
     };
 
     return (
@@ -791,7 +848,8 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                     <button
                                         type="submit"
                                         className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                        disabled={isLoading}
+                                        disabled={isLoading || !isFormValid()}
+                                        title={!isFormValid() ? "Please complete all required fields" : ""}
                                     >
                                         {isLoading ? (
                                             <span>Processing...</span>

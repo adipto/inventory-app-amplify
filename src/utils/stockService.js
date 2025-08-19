@@ -363,6 +363,7 @@ export const fetchStockEntries = async (token, page = 1, limit = 10, lastEvaluat
                     ? Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Packets?.N || 0) * (item.ItemType?.S === "Court Fee" ? 40 * 500 : 500)
                     : Number(item.UnitPrice?.N || 0) * Number(item.Quantity_Pcs?.N || 0),
                 isWholesale: !!item.Quantity_Packets,
+                stockType: item.StockType?.S || (item.Quantity_Packets ? "Wholesale" : "Retail"),
                 StockType_VariationName_Timestamp: item.StockType_VariationName_Timestamp?.S,
                 GSI_PK: item.GSI_PK?.S,
                 timestamp: item.Timestamp?.N ? Number(item.Timestamp.N) : null,
@@ -371,7 +372,9 @@ export const fetchStockEntries = async (token, page = 1, limit = 10, lastEvaluat
                 seriesStartNumber: item.SeriesStartNumber?.S || item.SeriesStartNumber?.N ? (item.SeriesStartNumber.S || item.SeriesStartNumber.N.toString()) : null,
                 seriesEndNumber: item.SeriesEndNumber?.S || item.SeriesEndNumber?.N ? (item.SeriesEndNumber.S || item.SeriesEndNumber.N.toString()) : null,
                 chalanNumber: item.ChalanNumber?.S || null,
-                chalanDate: item.ChalanDate?.S || null
+                chalanDate: item.ChalanDate?.S || null,
+                // PreviousTotalInvestment field for capital management tracking
+                PreviousTotalInvestment: item.PreviousTotalInvestment?.N ? Number(item.PreviousTotalInvestment.N) : null
             };
         });
 

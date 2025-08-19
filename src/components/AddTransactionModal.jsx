@@ -568,6 +568,7 @@ const handleSubmit = async (e) => {
             const quantityNum = parseFloat(quantity);
             const sellingPriceNum = parseFloat(sellingPrice);
             const transactionAmount = quantityNum * sellingPriceNum;
+            const cogsNum = parseFloat(cogs);
             
             // Calculate net profit dynamically: Selling Price - Total Product Cost
             let netProfitAmount = 0;
@@ -590,7 +591,7 @@ const handleSubmit = async (e) => {
                 netProfitAmount: netProfitAmount
             });
             
-            await updateAfterTransaction(idToken, transactionAmount, netProfitAmount);
+            await updateAfterTransaction(idToken, transactionAmount, netProfitAmount, quantityNum, productType);
         } catch (capitalError) {
             console.error("Error updating capital management:", capitalError);
         }
@@ -609,6 +610,50 @@ const handleSubmit = async (e) => {
         setIsSubmitting(false);
     }
 };
+
+    // Check if all required fields are completed
+    const isFormValid = () => {
+        const requiredFields = [
+            productType,
+            selectedCustomer,
+            selectedDateTime,
+            productCategory,
+            productVariation,
+            quantity,
+            sellingPrice
+        ];
+        
+        // Check if all required fields have values
+        const allFieldsFilled = requiredFields.every(field => 
+            field !== null && field !== undefined && field !== ""
+        );
+        
+        // Check if quantity is a valid number greater than 0
+        const validQuantity = quantity && !isNaN(parseFloat(quantity)) && parseFloat(quantity) > 0;
+        
+        // Check if selling price is a valid number greater than 0
+        const validSellingPrice = sellingPrice && !isNaN(parseFloat(sellingPrice)) && parseFloat(sellingPrice) > 0;
+        
+        // Check if there are available variations
+        const hasAvailableVariations = availableVariations.length > 0;
+        
+        // Check if selected variation has enough stock
+        let hasEnoughStock = false;
+        if (productVariation && quantity) {
+            const selectedVariationItem = availableVariations.find(item =>
+                item.VariationName === productVariation
+            );
+            if (selectedVariationItem) {
+                const availableStock = productType === "Retail" 
+                    ? parseInt(selectedVariationItem.Quantity_pcs) || 0
+                    : parseInt(selectedVariationItem.Quantity_packets) || 0;
+                const requestedQuantity = parseInt(quantity);
+                hasEnoughStock = requestedQuantity <= availableStock;
+            }
+        }
+        
+        return allFieldsFilled && validQuantity && validSellingPrice && hasAvailableVariations && hasEnoughStock;
+    };
 
     // Don't render if user is not authenticated
     if (!isAuthenticated) {
@@ -655,6 +700,21 @@ const handleSubmit = async (e) => {
                                 </div>
 
                                 <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                                    {/* Product Type */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Product Type <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            value={productType}
+                                            onChange={handleProductTypeChange}
+                                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        >
+                                            <option value="Retail">Retail</option>
+                                            <option value="Wholesale">Wholesale</option>
+                                        </select>
+                                    </div>
+
                                     {/* Customer Name Searchable Dropdown */}
                                     <div className="relative customer-search-container">
                                         <div className="flex items-center justify-between mb-1">
@@ -796,21 +856,6 @@ const handleSubmit = async (e) => {
                                         <div className="text-xs text-gray-500 mt-1">
                                             Showing only {productType.toLowerCase()} customers • {filterCustomers().length} available
                                         </div>
-                                    </div>
-
-                                    {/* Product Type */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Product Type <span className="text-red-500">*</span>
-                                        </label>
-                                        <select
-                                            value={productType}
-                                            onChange={handleProductTypeChange}
-                                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        >
-                                            <option value="Retail">Retail</option>
-                                            <option value="Wholesale">Wholesale</option>
-                                        </select>
                                     </div>
 
                                     {/* Product Category */}
@@ -1006,12 +1051,12 @@ const handleSubmit = async (e) => {
                                     <div className="mt-2">
                                         <button
                                             type="submit"
-                                            disabled={isSubmitting || availableVariations.length === 0}
+                                            disabled={isSubmitting || !isFormValid()}
                                             className={`w-full flex items-center justify-center px-4 py-2 text-white rounded-lg transition focus:outline-none focus:ring-2 disabled:opacity-70 ${isEditMode
                                                 ? "bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-500"
                                                 : "bg-green-500 hover:bg-green-600 focus:ring-green-500"
                                                 }`}
-                                            title={availableVariations.length === 0 ? "No stock available for the selected product type and category" : ""}
+                                            title={!isFormValid() ? "Please complete all required fields" : ""}
                                         >
                                             {isSubmitting ? (
                                                 <span className="flex items-center">
