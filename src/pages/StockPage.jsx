@@ -36,6 +36,7 @@ function StockPage() {
   const [stockEntries, setStockEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   
   // Ref for AllStockEntriesTable to call its refresh method
   const allStockEntriesTableRef = useRef();
@@ -298,6 +299,35 @@ function StockPage() {
     setShowActionsMenu(null);
   };
 
+  // Initialize Total Transaction Quantity for existing stock items
+  const handleInitializeTotalTransactionQuantity = async () => {
+    if (!isAdmin) return;
+    
+    setIsInitializing(true);
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+      
+      if (!idToken) {
+        throw new Error('No authentication token available');
+      }
+
+      // Import and run the initialization function
+      const { initializeAllStockTables } = await import('../utils/initializeTotalTransactionQuantity');
+      await initializeAllStockTables();
+      
+      // Refresh the data to show the new field
+      await fetchData();
+      
+      alert('Total Transaction Quantity field has been initialized for all stock items!');
+    } catch (error) {
+      console.error('Error initializing Total Transaction Quantity:', error);
+      alert(`Failed to initialize Total Transaction Quantity: ${error.message}`);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
   const handleDeleteItem = (item) => {
     // Determine the correct table name based on whether the item is retail or wholesale
     let tableName;
@@ -356,14 +386,15 @@ function StockPage() {
       "Variation",
       activeTab === "retail" ? "Quantity (pcs)" : "Quantity (packets)",
       "Unit Price",
-      "Total Value"
+      "Total Value",
+      "Total Transaction Quantity"
     ];
 
     const csvData = [
       headers.join(","),
       ...filteredAndSortedStock.map(item => {
         const totalValue = calculateTotalValue(item);
-        return `"TK {item.itemType}","TK {item.variationName}",TK {item.quantity},TK {item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"},TK {totalValue.toFixed(2)}`;
+        return `"TK {item.itemType}","TK {item.variationName}",TK {item.quantity},TK {item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"},TK {totalValue.toFixed(2)},TK {item.totalTransactionQuantity || 0}`;
       })
     ].join("\n");
 
@@ -539,6 +570,8 @@ const handleAllStockRefresh = async () => {
                     Refresh
                   </button>
 
+
+
                   {isAdmin && (
                     <button
                       onClick={() => {
@@ -642,6 +675,9 @@ const handleAllStockRefresh = async () => {
                           Total Value
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Total Transaction Qty
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -703,6 +739,13 @@ const handleAllStockRefresh = async () => {
                                  <div className="text-sm font-medium text-gray-900">
                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
                                      BDT {item.totalValue.toFixed(2)}
+                                   </span>
+                                 </div>
+                               </td>
+                               <td className="px-3 py-4 whitespace-nowrap">
+                                 <div className="text-sm font-medium text-gray-900">
+                                   <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                     {item.totalTransactionQuantity || 0}
                                    </span>
                                  </div>
                                </td>

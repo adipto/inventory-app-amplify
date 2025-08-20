@@ -2,6 +2,106 @@
 import { ScanCommand, DeleteItemCommand, GetItemCommand, UpdateItemCommand, PutItemCommand, QueryCommand } from "@aws-sdk/client-dynamodb";
 import { createDynamoDBClient } from "../aws/aws-config";
 
+/**
+ * Update Total Transaction Quantity for a stock item
+ * @param {Object} params
+ * @param {string} params.tableName - 'Retail_Stock' or 'Wholesale_Stock'
+ * @param {string} params.itemType - ItemType (e.g., 'Non-judicial stamp')
+ * @param {string} params.variationName - VariationName (e.g., '30-26')
+ * @param {number} params.quantityChange - Positive for increment, negative for decrement
+ * @param {string} params.token - Auth token
+ */
+export const updateTotalTransactionQuantity = async ({
+    tableName,
+    itemType,
+    variationName,
+    quantityChange,
+    token,
+}) => {
+    const client = await createDynamoDBClient(token);
+    
+    // Use DynamoDB's SET with addition to update total transaction quantity
+    const command = new UpdateItemCommand({
+        TableName: tableName,
+        Key: {
+            ItemType: { S: itemType },
+            VariationName: { S: variationName }
+        },
+        UpdateExpression: "SET TotalTransactionQuantity = if_not_exists(TotalTransactionQuantity, :zero) + :q",
+        ExpressionAttributeValues: {
+            ":q": { N: quantityChange.toString() },
+            ":zero": { N: "0" }
+        }
+    });
+
+    return client.send(command);
+};
+
+/**
+ * Initialize TotalTransactionQuantity field for existing stock items
+ * This function should be run once to add the new field to existing items
+ * @param {string} tableName - 'Retail_Stock' or 'Wholesale_Stock'
+ * @param {string} token - Auth token
+ */
+export const initializeTotalTransactionQuantity = async (tableName, token) => {
+    const client = await createDynamoDBClient(token);
+    
+    try {
+        // Scan all items in the table
+        const scanCommand = new ScanCommand({
+            TableName: tableName,
+        });
+        
+        const response = await client.send(scanCommand);
+        
+        if (!response.Items || response.Items.length === 0) {
+            console.log(`No items found in ${tableName}`);
+            return;
+        }
+        
+        console.log(`Found ${response.Items.length} items in ${tableName}, initializing TotalTransactionQuantity...`);
+        
+        // Update each item to add TotalTransactionQuantity field with default value 0
+        for (const item of response.Items) {
+            const itemType = item.ItemType?.S;
+            const variationName = item.VariationName?.S;
+            
+            if (!itemType || !variationName) {
+                console.warn(`Skipping item with missing ItemType or VariationName:`, item);
+                continue;
+            }
+            
+            // Check if TotalTransactionQuantity already exists
+            if (item.TotalTransactionQuantity) {
+                console.log(`Item ${itemType}-${variationName} already has TotalTransactionQuantity: ${item.TotalTransactionQuantity.N}`);
+                continue;
+            }
+            
+            // Add TotalTransactionQuantity field with value 0
+            const updateCommand = new UpdateItemCommand({
+                TableName: tableName,
+                Key: {
+                    ItemType: { S: itemType },
+                    VariationName: { S: variationName }
+                },
+                UpdateExpression: "SET TotalTransactionQuantity = :zero",
+                ExpressionAttributeValues: {
+                    ":zero": { N: "0" }
+                }
+            });
+            
+            await client.send(updateCommand);
+            console.log(`Initialized TotalTransactionQuantity for ${itemType}-${variationName}`);
+        }
+        
+        console.log(`Successfully initialized TotalTransactionQuantity for all items in ${tableName}`);
+        
+    } catch (error) {
+        console.error(`Error initializing TotalTransactionQuantity for ${tableName}:`, error);
+        throw error;
+    }
+};
+
 export const fetchStock = async (tableName, token) => {
     const client = await createDynamoDBClient(token);
 
@@ -55,6 +155,7 @@ export const fetchStock = async (tableName, token) => {
             unitPrice: unitPrice,
             totalValue: totalValue, // Add total value to each item
             lowStockThreshold: Number(item.LowStockThreshold?.N || 10),
+            totalTransactionQuantity: Number(item.TotalTransactionQuantity?.N || 0),
         };
     }) || [];
 
@@ -170,6 +271,7 @@ export const getStockItem = async (tableName, itemType, variationName, token) =>
         unitPrice: unitPrice,
         totalValue: totalValue,
         lowStockThreshold: Number(response.Item.LowStockThreshold?.N || 10),
+        totalTransactionQuantity: Number(response.Item.TotalTransactionQuantity?.N || 0),
     };
 };
 
@@ -206,7 +308,23 @@ export const updateStockAfterTransaction = async ({
         }
     });
 
-    return client.send(command);
+    const result = await client.send(command);
+
+    // Also update the total transaction quantity (increment)
+    try {
+        await updateTotalTransactionQuantity({
+            tableName,
+            itemType,
+            variationName,
+            quantityChange: quantityToSubtract, // Positive increment
+            token,
+        });
+    } catch (error) {
+        console.error("Error updating total transaction quantity:", error);
+        // Don't fail the main operation if this fails
+    }
+
+    return result;
 };
 
 export const restoreStockAfterTransactionDeletion = async ({
@@ -232,7 +350,23 @@ export const restoreStockAfterTransactionDeletion = async ({
         }
     });
 
-    return client.send(command);
+    const result = await client.send(command);
+
+    // Also update the total transaction quantity (decrement)
+    try {
+        await updateTotalTransactionQuantity({
+            tableName,
+            itemType,
+            variationName,
+            quantityChange: -quantityToRestore, // Negative decrement
+            token,
+        });
+    } catch (error) {
+        console.error("Error updating total transaction quantity:", error);
+        // Don't fail the main operation if this fails
+    }
+
+    return result;
 };
 
 export const updateStockEntry = async ({

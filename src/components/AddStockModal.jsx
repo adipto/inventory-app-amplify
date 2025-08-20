@@ -535,10 +535,11 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                             ItemType: { S: itemType },
                             VariationName: { S: variationName }
                         },
-                        UpdateExpression: `SET ${quantityField} = :q, LowStockThreshold = :lst`,
+                        UpdateExpression: `SET ${quantityField} = :q, LowStockThreshold = :lst, TotalTransactionQuantity = if_not_exists(TotalTransactionQuantity, :zero)`,
                         ExpressionAttributeValues: {
                             ":q": { N: newQuantity.toString() },
-                            ":lst": { N: lowStockThreshold.toString() }
+                            ":lst": { N: lowStockThreshold.toString() },
+                            ":zero": { N: "0" }
                         }
                     });
 
@@ -557,7 +558,8 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             VariationName: { S: variationName },
             [quantityField]: { N: quantity.toString() },
             LowStockThreshold: { N: lowStockThreshold.toString() },
-            Date: { S: date } // Add the date field
+            Date: { S: date }, // Add the date field
+            TotalTransactionQuantity: { N: "0" } // Initialize total transaction quantity to 0
         };
 
         // Extract unit price from variation name (assuming the pattern)
