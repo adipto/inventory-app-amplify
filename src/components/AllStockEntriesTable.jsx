@@ -104,6 +104,53 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         }
     };
 
+    const handleExportData = () => {
+        const headers = [
+            "Date & Time",
+            "Item Type",
+            "Variation",
+            "Stock Type",
+            "Quantity (Pcs)",
+            "Quantity (Packets)",
+            "Unit Price",
+            "Total Value",
+            "Series Start",
+            "Series End",
+            "Chalan Number",
+            "Chalan Date"
+        ];
+
+        const csvData = [
+            headers.join(","),
+            ...filteredEntries.map(entry => {
+                return [
+                    entry.timestampDisplay || "",
+                    entry.itemType || "",
+                    entry.variationName || "",
+                    entry.stockType || "",
+                    entry.quantityPcs || "",
+                    entry.quantityPackets || "",
+                    entry.unitPrice?.toFixed(2) || "",
+                    entry.totalValue?.toFixed(2) || "",
+                    entry.seriesStartNumber || "",
+                    entry.seriesEndNumber || "",
+                    entry.chalanNumber || "",
+                    entry.chalanDate || ""
+                ].join(",");
+            })
+        ].join("\n");
+
+        const blob = new Blob([csvData], { type: "text/csv" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `stock-entries-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    };
+
     const handlePageChange = async (newPage) => {
         if (newPage === currentPage) return;
         
@@ -377,8 +424,8 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                     remainingStockAfterDeletion
                 });
                 
-                if (totalTransactionQty >= remainingStockAfterDeletion) {
-                    const errorMessage = `Cannot delete this stock entry. Total Transaction Quantity (${totalTransactionQty}) is greater than or equal to the remaining stock after deletion (${remainingStockAfterDeletion}). This would result in negative transaction quantities.`;
+                if (totalTransactionQty > remainingStockAfterDeletion) {
+                    const errorMessage = `Cannot delete this stock entry. Total Transaction Quantity (${totalTransactionQty}) is greater than the remaining stock after deletion (${remainingStockAfterDeletion}). This would result in negative transaction quantities.`;
                     setError(errorMessage);
                     setIsDeleting(false);
                     // Show error alert to user
@@ -663,37 +710,61 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             ) : (
                 <>
                     <div className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div className="flex gap-2 items-center">
-                            <label className="text-sm text-gray-600">Filter by Date:</label>
-                            <input
-                                type="date"
-                                value={filterDate}
-                                onChange={e => setFilterDate(e.target.value)}
-                                className="border rounded px-2 py-1 text-sm"
-                            />
+                        <div className="flex flex-col md:flex-row gap-4">
+                            <div className="flex gap-2 items-center">
+                                <label className="text-sm text-gray-600">Filter by Date:</label>
+                                <input
+                                    type="date"
+                                    value={filterDate}
+                                    onChange={e => setFilterDate(e.target.value)}
+                                    className="border rounded px-2 py-1 text-sm"
+                                />
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <label className="text-sm text-gray-600">Filter by Item Type:</label>
+                                <select
+                                    value={filterItemType}
+                                    onChange={e => setFilterItemType(e.target.value)}
+                                    className="border rounded px-2 py-1 text-sm"
+                                >
+                                    <option value="">All</option>
+                                    {itemTypes.map(type => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <label className="text-sm text-gray-600">Search:</label>
+                                <input
+                                    type="text"
+                                    placeholder="Search by chalan number or series start..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="border rounded px-2 py-1 text-sm w-64"
+                                />
+                            </div>
                         </div>
-                        <div className="flex gap-2 items-center">
-                            <label className="text-sm text-gray-600">Filter by Item Type:</label>
-                            <select
-                                value={filterItemType}
-                                onChange={e => setFilterItemType(e.target.value)}
-                                className="border rounded px-2 py-1 text-sm"
+                        <div className="flex gap-1 items-center">
+                            <button
+                                onClick={handleExportData}
+                                disabled={filteredEntries.length === 0}
+                                className="px-1.5 py-1 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-xs font-medium transition-colors disabled:opacity-50"
                             >
-                                <option value="">All</option>
-                                {itemTypes.map(type => (
-                                    <option key={type} value={type}>{type}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            <label className="text-sm text-gray-600">Search:</label>
-                            <input
-                                type="text"
-                                placeholder="Search by chalan number or series start..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="border rounded px-2 py-1 text-sm w-64"
-                            />
+                                <svg className="w-2.5 h-2.5 mr-0.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Export
+                            </button>
+                            <button
+                                onClick={handleRefresh}
+                                disabled={loading}
+                                className="px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors disabled:opacity-50"
+                            >
+                                <svg className="w-2.5 h-2.5 mr-0.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Refresh
+                            </button>
                         </div>
                     </div>
                     

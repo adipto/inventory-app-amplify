@@ -127,17 +127,28 @@ function PageHeader({ title, onAllClick, onRetailClick, onWholesaleClick, active
 
                     {/* Auth Section */}
                     {user ? (
-                        <div className="flex items-center space-x-2">
-                            <div className="hidden md:block text-right">
-                                <div className="text-sm font-medium text-gray-900">
-                                    {userEmail || user.username || "User"}
+                        <div className="flex items-center space-x-3">
+                            {/* User Avatar and Info */}
+                            <div className="hidden md:flex items-center space-x-3 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2 rounded-xl border border-blue-200 shadow-sm">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
+                                    <User size={16} className="text-white" />
                                 </div>
-                                <div className="text-xs text-gray-500">Authenticated</div>
+                                <div className="text-right">
+                                    <div className="text-sm font-semibold text-gray-800 truncate max-w-32">
+                                        {userEmail || user.username || "User"}
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                        <span className="text-xs font-medium text-green-600">Active</span>
+                                    </div>
+                                </div>
                             </div>
+                            
+                            {/* Logout Button */}
                             <button
                                 onClick={handleLogout}
                                 disabled={isLoading}
-                                className="ml-2 p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-full disabled:opacity-50"
+                                className="p-2.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-xl border border-gray-200 hover:border-red-200 transition-all duration-200 disabled:opacity-50 shadow-sm hover:shadow-md"
                                 title="Sign out"
                             >
                                 <LogOut size={18} />
@@ -147,9 +158,9 @@ function PageHeader({ title, onAllClick, onRetailClick, onWholesaleClick, active
                         <button
                             onClick={handleLogin}
                             disabled={isLoading}
-                            className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50"
+                            className="flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 disabled:opacity-50 shadow-md hover:shadow-lg transform hover:scale-105"
                         >
-                            <User size={16} className="mr-1" />
+                            <User size={16} className="mr-2" />
                             {isLoading ? "Signing In..." : "Sign In"}
                         </button>
                     )}

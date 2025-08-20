@@ -101,6 +101,54 @@ function TransactionTableView({
     .reduce((sum, tx) => sum + calculateNetProfit(tx), 0)
     .toFixed(2);
 
+  // Export transactions to CSV
+  const handleExportData = () => {
+    const headers = [
+      "Date/Time",
+      "Customer",
+      "Type",
+      "Product",
+      "Variation",
+      "Quantity",
+      "COGS (Per Piece)",
+      "Selling Price",
+      "Total Product Cost",
+      "Total Amount Charged",
+      "Net Profit",
+      "Notes"
+    ];
+
+    const csvData = [
+      headers.join(","),
+      ...displayTransactions.map(transaction => {
+        return [
+          transaction.Date + " " + (transaction.Time || ""),
+          customerDetails[transaction.CustomerID]?.Name || transaction.CustomerID,
+          transaction.type || transactionType,
+          transaction.ProductName || "",
+          transaction.ProductVariation || "",
+          transaction.quantity || "",
+          transaction.cogs || "",
+          transaction.sellingPrice || "",
+          calculateTotalProductCost(transaction),
+          calculateTotalAmountCharged(transaction),
+          calculateNetProfit(transaction),
+          transaction.Notes || ""
+        ].map(field => `"${field}"`).join(",");
+      })
+    ].join("\n");
+
+    const blob = new Blob([csvData], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `transactions-${transactionType}-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
   // Render empty state
   const renderEmptyState = () => (
     <div className="flex flex-col items-center justify-center text-center p-12">
@@ -533,6 +581,17 @@ function TransactionTableView({
               />
             </svg>
           </button>
+
+                     <button
+             onClick={handleExportData}
+             className="px-3 py-2 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-sm font-medium transition-colors"
+             title="Export transactions"
+           >
+             <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+             </svg>
+             Export
+           </button>
 
           <button
             onClick={onNewTransaction}

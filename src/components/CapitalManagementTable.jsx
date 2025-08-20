@@ -32,6 +32,28 @@ function CapitalManagementTable() {
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [allTimeProfit, setAllTimeProfit] = useState(null);
   const [isCalculatingAllTimeProfit, setIsCalculatingAllTimeProfit] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if user is admin
+  const checkAdminStatus = async () => {
+    try {
+      const session = await fetchAuthSession();
+      const groups = session.tokens?.accessToken?.payload?.["cognito:groups"] || [];
+      const adminGroups = ["admin", "Admin", "ADMIN"];
+      const userIsAdmin = groups.some((group) => adminGroups.includes(group));
+      
+      console.log('Admin check:', {
+        groups: groups,
+        adminGroups: adminGroups,
+        userIsAdmin: userIsAdmin
+      });
+      
+      setIsAdmin(userIsAdmin);
+    } catch (error) {
+      console.error("Error checking admin status:", error);
+      setIsAdmin(false);
+    }
+  };
 
   // Fetch capital management data
   const fetchCapitalData = async () => {
@@ -459,6 +481,9 @@ function CapitalManagementTable() {
           throw new Error("No valid authentication token found");
         }
 
+        // Check admin status first
+        await checkAdminStatus();
+        
         // First refresh the capital management data
         await refreshCapitalManagement(idToken);
         
@@ -563,14 +588,16 @@ function CapitalManagementTable() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-lg font-semibold text-gray-900">Capital Management Overview</h2>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                             <button
-                 onClick={handleTakeProfitClick}
-                 disabled={data.cashInHand <= 0}
-                 className="flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-               >
-                 <Plus size={16} className="mr-2" />
-                 Take Profit
-               </button>
+                             {isAdmin && (
+                               <button
+                                 onClick={handleTakeProfitClick}
+                                 disabled={data.cashInHand <= 0}
+                                 className="flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                               >
+                                 <Plus size={16} className="mr-2" />
+                                 Take Profit
+                               </button>
+                             )}
                <button
                  onClick={handleTestLogging}
                  className="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"

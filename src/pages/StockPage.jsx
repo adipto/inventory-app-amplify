@@ -544,33 +544,45 @@ const handleAllStockRefresh = async () => {
                 <div className="flex flex-wrap items-center gap-2 mt-2 md:mt-0">
                   <button
                     onClick={() => setShowLowStock(!showLowStock)}
-                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors TK {showLowStock
-                      ? "bg-amber-50 border-amber-200 text-amber-700"
-                      : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                      }`}
+                    className={`px-1.5 py-1 rounded border text-xs font-medium transition-colors ${
+                      showLowStock
+                        ? "bg-orange-50 border-orange-300 text-orange-700"
+                        : "bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100"
+                    }`}
                   >
-                    <AlertCircle size={16} className="mr-1" />
+                    <AlertCircle size={10} className="mr-0.5" />
                     Low Stock
                   </button>
 
                   <button
                     onClick={handleExportData}
-                    className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-medium transition-colors"
+                    className="px-1.5 py-1 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-xs font-medium transition-colors"
                   >
-                    <Download size={16} className="mr-1" />
+                    <Download size={10} className="mr-0.5" />
                     Export
                   </button>
 
                   <button
                     onClick={fetchData}
                     disabled={isLoading}
-                    className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm font-medium transition-colors disabled:opacity-50"
+                    className="px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw size={16} className="mr-1" />
+                    <RefreshCw size={10} className="mr-1" />
                     Refresh
                   </button>
 
-
+                  {!isAdmin && (
+                    <button
+                      onClick={() => {
+                        setItemToEdit(null);
+                        setIsAddModalOpen(true);
+                      }}
+                      className="px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors"
+                    >
+                      <Plus size={10} className="mr-0.5" />
+                      New
+                    </button>
+                  )}
 
                   {isAdmin && (
                     <button
@@ -578,9 +590,9 @@ const handleAllStockRefresh = async () => {
                         setItemToEdit(null);
                         setIsAddModalOpen(true);
                       }}
-                      className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-medium transition-colors"
+                      className="px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors"
                     >
-                      <Plus size={16} className="mr-1" />
+                      <Plus size={10} className="mr-0.5" />
                       New
                     </button>
                   )}
