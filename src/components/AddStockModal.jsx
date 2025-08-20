@@ -19,9 +19,12 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
     const [isEdit, setIsEdit] = useState(false);
     const [originalItem, setOriginalItem] = useState(null);
     const [date, setDate] = useState(() => {
-        // Default to today's date in YYYY-MM-DD format
+        // Default to today's date in YYYY-MM-DD format using local timezone
         const today = new Date();
-        return today.toISOString().split('T')[0];
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     });
     const [time, setTime] = useState(() => {
         // Default to current time in HH:MM format
@@ -278,7 +281,10 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         setIsEdit(false);
         setOriginalItem(null);
         const today = new Date();
-        setDate(today.toISOString().split('T')[0]);
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        setDate(`${year}-${month}-${day}`);
         setTime(today.toTimeString().slice(0, 5));
     };
 

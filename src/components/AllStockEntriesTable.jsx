@@ -181,16 +181,9 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const filteredEntries = entries.filter(entry => {
         let matchesDate = true;
         if (filterDate) {
-            // Convert filter date to start and end of day timestamps
-            const filterDateObj = new Date(filterDate);
-            const startOfDay = new Date(filterDateObj.getFullYear(), filterDateObj.getMonth(), filterDateObj.getDate());
-            const endOfDay = new Date(filterDateObj.getFullYear(), filterDateObj.getMonth(), filterDateObj.getDate() + 1);
-            const startTimestamp = startOfDay.getTime();
-            const endTimestamp = endOfDay.getTime();
-            
-            // Check if entry timestamp falls within the day
-            const entryTimestamp = entry.timestamp || entry.Timestamp;
-            matchesDate = entryTimestamp >= startTimestamp && entryTimestamp < endTimestamp;
+            // Get the entry date from the Date field (string format like "2024-08-20")
+            const entryDate = entry.date || entry.Date;
+            matchesDate = entryDate === filterDate;
         }
         const matchesType = filterItemType ? entry.itemType === filterItemType : true;
         
