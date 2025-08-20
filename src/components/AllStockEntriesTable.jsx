@@ -345,6 +345,56 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             const session = await fetchAuthSession();
             const token = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
             
+            // --- Validation: Check Total Transaction Quantity before deletion ---
+            try {
+                const { getStockItem } = await import("../utils/stockService");
+                const tableName = deleteEntry.isWholesale ? "Wholesale_Stock" : "Retail_Stock";
+                const mainItemType = deleteEntry.itemType || deleteEntry.ItemType;
+                const mainVariationName = deleteEntry.variationName || deleteEntry.VariationName;
+                
+                if (!mainItemType || !mainVariationName) {
+                    setError("Failed to validate deletion. Main stock key is missing.");
+                    setIsDeleting(false);
+                    return;
+                }
+                
+                const stockItem = await getStockItem(tableName, mainItemType, mainVariationName, token);
+                if (!stockItem) {
+                    setError("Failed to validate deletion. Stock item not found.");
+                    setIsDeleting(false);
+                    return;
+                }
+                
+                const totalStock = stockItem.quantity;
+                const stockEntryQuantity = deleteEntry.quantityPcs || deleteEntry.quantityPackets || deleteEntry.quantity || 0;
+                const totalTransactionQty = stockItem.totalTransactionQuantity || 0;
+                const remainingStockAfterDeletion = totalStock - stockEntryQuantity;
+                
+                console.log('Validation check:', {
+                    totalStock,
+                    stockEntryQuantity,
+                    totalTransactionQty,
+                    remainingStockAfterDeletion
+                });
+                
+                if (totalTransactionQty >= remainingStockAfterDeletion) {
+                    const errorMessage = `Cannot delete this stock entry. Total Transaction Quantity (${totalTransactionQty}) is greater than or equal to the remaining stock after deletion (${remainingStockAfterDeletion}). This would result in negative transaction quantities.`;
+                    setError(errorMessage);
+                    setIsDeleting(false);
+                    // Show error alert to user
+                    alert(errorMessage);
+                    return;
+                }
+                
+                console.log('Validation passed. Proceeding with deletion.');
+                
+            } catch (validationError) {
+                console.error('Error during validation:', validationError);
+                setError(`Validation failed: ${validationError.message}`);
+                setIsDeleting(false);
+                return;
+            }
+            
             // --- Fetch Stock Transaction Details Before Deletion ---
             const { fetchStockEntries } = await import("../utils/stockService");
             const allEntries = await fetchStockEntries(token, 1, 1000, null); // Get all entries to check if this is the last one
