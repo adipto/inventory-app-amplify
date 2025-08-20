@@ -341,43 +341,7 @@ function CapitalManagementTable() {
     }
   };
 
-  // Test logging function for debugging
-  const handleTestLogging = async () => {
-    try {
-      console.log('🧪 Testing transaction logging...');
-      
-      const session = await fetchAuthSession();
-      const idToken = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
 
-      if (!idToken) {
-        throw new Error("No valid authentication token found");
-      }
-
-      // Test with dummy values
-      const testAmount = 1000;
-      const testPreviousCash = 50000;
-      const testNewCash = 49000;
-
-      console.log('🧪 Test values:', { testAmount, testPreviousCash, testNewCash });
-
-      const transactionId = await logTakeProfitTransaction(idToken, testAmount, testPreviousCash, testNewCash);
-      
-      if (transactionId) {
-        console.log('✅ Test transaction logged successfully with ID:', transactionId);
-        alert('Test transaction logged successfully! Check the console for details.');
-        
-        // Refresh the transaction list to show the new entry
-        await fetchTakeProfitTransactions();
-      } else {
-        console.log('❌ Test transaction logging failed');
-        alert('Test transaction logging failed. Check the console for details.');
-      }
-      
-    } catch (error) {
-      console.error("❌ Error in test logging:", error);
-      alert(`Test logging failed: ${error.message}`);
-    }
-  };
 
   // Log take profit transaction
   const logTakeProfitTransaction = async (token, amount, previousCash, newCash) => {
@@ -598,13 +562,7 @@ function CapitalManagementTable() {
                                  Take Profit
                                </button>
                              )}
-               <button
-                 onClick={handleTestLogging}
-                 className="flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
-                 title="Test transaction logging"
-               >
-                 🧪 Test Log
-               </button>
+
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import { signInWithRedirect, signOut, fetchAuthSession } from "aws-amplify/auth";
-import { ShoppingBag, Package, LogOut, User, List } from "lucide-react";
+import { ShoppingBag, Package, LogOut, User, List, Filter } from "lucide-react";
 
 function PageHeader({ title, onAllClick, onRetailClick, onWholesaleClick, activeFilter, onFilterChange }) {
     const { user } = useAuthenticator((context) => [context.user]);
@@ -112,14 +112,14 @@ function PageHeader({ title, onAllClick, onRetailClick, onWholesaleClick, active
                                 onClick={handleRetailClick}
                                 className={getButtonClass(isRetailActive)}
                             >
-                                <ShoppingBag size={16} className="inline mr-1" />
+                                <Filter size={16} className="inline mr-1" />
                                 Retail
                             </button>
                             <button
                                 onClick={handleWholesaleClick}
                                 className={getButtonClass(isWholesaleActive)}
                             >
-                                <Package size={16} className="inline mr-1" />
+                                <Filter size={16} className="inline mr-1" />
                                 Wholesale
                             </button>
                         </div>

@@ -1,13 +1,18 @@
 // src/components/TransactionTableView.jsx
 import { format } from "date-fns";
+import { fetchAuthSession } from "aws-amplify/auth";
 import {
   ChevronDown,
   Clipboard,
   PlusCircle,
   Search,
   Trash2,
+  Edit3,
+  Check,
+  X,
+  Filter,
 } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 
 function TransactionTableView({
   displayTransactions,
@@ -26,6 +31,10 @@ function TransactionTableView({
   onNewTransaction,
   onDeleteTransaction,
 }) {
+  // State for editing notes
+  const [editingNotes, setEditingNotes] = useState(null);
+  const [editingNoteValue, setEditingNoteValue] = useState("");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
   // Format date helper
   const formatDate = (dateString) => {
     try {
@@ -90,6 +99,96 @@ function TransactionTableView({
         // Other products: Net Profit = (Quantity × Selling Price) - (Quantity × COGS × 500)
         return (quantity * sellingPrice) - (quantity * cogs * 500);
       }
+    }
+  };
+
+  // Handle note editing
+  const handleEditNotes = (transaction) => {
+    setEditingNotes(transaction.TransactionID);
+    setEditingNoteValue(transaction.Notes || "");
+  };
+
+  const handleCancelEditNotes = () => {
+    setEditingNotes(null);
+    setEditingNoteValue("");
+  };
+
+  const handleSaveNotes = async (transaction) => {
+    if (editingNoteValue === (transaction.Notes || "")) {
+      setEditingNotes(null);
+      setEditingNoteValue("");
+      return;
+    }
+
+    setIsSavingNotes(true);
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+      
+      if (!idToken) {
+        throw new Error("No authentication token available");
+      }
+
+      const { DynamoDBClient, UpdateItemCommand } = await import("@aws-sdk/client-dynamodb");
+      const { fromCognitoIdentityPool } = await import("@aws-sdk/credential-provider-cognito-identity");
+      
+      const REGION = import.meta.env.VITE_COGNITO_REGION || "us-east-1";
+      const IDENTITY_POOL_ID = import.meta.env.VITE_COGNITO_IDENTITY_POOL_ID;
+      
+      const credentials = fromCognitoIdentityPool({
+        identityPoolId: IDENTITY_POOL_ID,
+        logins: {
+          [`cognito-idp.${REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`]: idToken,
+        },
+        clientConfig: { region: REGION },
+      });
+
+      const client = new DynamoDBClient({
+        region: REGION,
+        credentials,
+      });
+
+      // Determine which table to update based on transaction type
+      const tableName = transaction.type === "retail" ? "Transaction_Retail" : "Transaction_Wholesale";
+      
+      const updateCommand = new UpdateItemCommand({
+        TableName: tableName,
+        Key: {
+          TransactionID: { S: transaction.TransactionID }
+        },
+        UpdateExpression: "SET Notes = :notes",
+        ExpressionAttributeValues: {
+          ":notes": { S: editingNoteValue || "-" }
+        }
+      });
+
+      await client.send(updateCommand);
+      
+      // Update local state
+      transaction.Notes = editingNoteValue || "-";
+      
+      // Close editing mode
+      setEditingNotes(null);
+      setEditingNoteValue("");
+      
+      // Refresh the data
+      if (onRefresh) {
+        await onRefresh();
+      }
+      
+    } catch (error) {
+      console.error("Error updating transaction notes:", error);
+      alert("Failed to update notes. Please try again.");
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleKeyDown = (e, transaction) => {
+    if (e.key === 'Enter') {
+      handleSaveNotes(transaction);
+    } else if (e.key === 'Escape') {
+      handleCancelEditNotes();
     }
   };
 
@@ -323,9 +422,58 @@ function TransactionTableView({
                       </span>
                     </td>
                     <td className="px-3 py-3 text-sm text-gray-600">
-                      <div className="max-w-32 truncate" title={transaction.Notes || "-"}>
-                        {transaction.Notes || "-"}
-                      </div>
+                      {editingNotes === transaction.TransactionID ? (
+                        <div className="flex items-center space-x-1">
+                          <input
+                            type="text"
+                            value={editingNoteValue}
+                            onChange={(e) => setEditingNoteValue(e.target.value)}
+                            onKeyDown={(e) => handleKeyDown(e, transaction)}
+                            className="w-24 px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter notes..."
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveNotes(transaction)}
+                            disabled={isSavingNotes}
+                            className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50 disabled:opacity-50"
+                            title="Save"
+                          >
+                            {isSavingNotes ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600"></div>
+                            ) : (
+                              <Check size={12} />
+                            )}
+                          </button>
+                          <button
+                            onClick={handleCancelEditNotes}
+                            disabled={isSavingNotes}
+                            className="text-gray-600 hover:text-gray-800 p-1 rounded hover:bg-gray-50 disabled:opacity-50"
+                            title="Cancel"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1 group">
+                          <div 
+                            className="max-w-32 truncate cursor-pointer hover:bg-gray-100 px-2 py-1 rounded" 
+                            title={transaction.Notes || "-"}
+                            onClick={() => handleEditNotes(transaction)}
+                          >
+                            {transaction.Notes || "-"}
+                          </div>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleEditNotes(transaction)}
+                              className="opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition-opacity"
+                              title="Edit notes"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-sm text-right">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
@@ -444,16 +592,53 @@ function TransactionTableView({
               </div>
 
               {/* Notes */}
-              {transaction.Notes && transaction.Notes !== "-" && (
-                <div className="bg-yellow-50 rounded-lg p-3">
-                  <div className="flex items-start">
-                    <span className="text-sm font-medium text-gray-700 mr-2">📝 Notes:</span>
-                    <span className="text-sm text-gray-900 flex-1">
-                      {transaction.Notes}
-                    </span>
-                  </div>
+              <div className="bg-yellow-50 rounded-lg p-3">
+                <div className="flex items-start justify-between">
+                  <span className="text-sm font-medium text-gray-700 mr-2">📝 Notes:</span>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleEditNotes(transaction)}
+                      className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
+                      title="Edit notes"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                  )}
                 </div>
-              )}
+                {editingNotes === transaction.TransactionID ? (
+                  <div className="mt-2 space-y-2">
+                    <input
+                      type="text"
+                      value={editingNoteValue}
+                      onChange={(e) => setEditingNoteValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, transaction)}
+                      className="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter notes..."
+                      autoFocus
+                    />
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleSaveNotes(transaction)}
+                        disabled={isSavingNotes}
+                        className="flex-1 bg-green-600 text-white px-3 py-1.5 text-sm rounded hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {isSavingNotes ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={handleCancelEditNotes}
+                        disabled={isSavingNotes}
+                        className="flex-1 bg-gray-600 text-white px-3 py-1.5 text-sm rounded hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-900 flex-1">
+                    {transaction.Notes || "-"}
+                  </span>
+                )}
+              </div>
 
               {/* Financial Information */}
                 <div className="bg-blue-50 rounded-lg p-3 space-y-2">
@@ -516,41 +701,46 @@ function TransactionTableView({
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       {/* Transaction Filters and Controls */}
       <div className="p-4 border-b flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex bg-gray-100 p-1 rounded-lg">
           <button
             onClick={() => onTransactionTypeChange("all")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
               transactionType === "all"
-                ? "bg-blue-600 text-white shadow-md font-semibold"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-700 hover:bg-white hover:shadow-sm"
             }`}
           >
+            <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
             All
           </button>
           <button
             onClick={() => onTransactionTypeChange("retail")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
               transactionType === "retail"
-                ? "bg-blue-600 text-white shadow-md font-semibold"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-700 hover:bg-white hover:shadow-sm"
             }`}
           >
+            <Filter size={16} className="inline mr-1" />
             Retail
           </button>
           <button
             onClick={() => onTransactionTypeChange("wholesale")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
               transactionType === "wholesale"
-                ? "bg-blue-600 text-white shadow-md font-semibold"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-700 hover:bg-white hover:shadow-sm"
             }`}
           >
+            <Filter size={16} className="inline mr-1" />
             Wholesale
           </button>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
+          <div className="relative flex-1 sm:w-96">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search size={16} className="text-gray-400" />
             </div>
@@ -558,7 +748,7 @@ function TransactionTableView({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by customer name or phone..."
+              placeholder="Search by customer name or phone number..."
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>

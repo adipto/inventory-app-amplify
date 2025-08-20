@@ -515,6 +515,7 @@ const handleAllStockRefresh = async () => {
                       : "text-gray-600 hover:text-gray-900"
                       }`}
                   >
+                    <Filter size={16} className="inline mr-1" />
                     Retail
                   </button>
                   <button
@@ -524,6 +525,7 @@ const handleAllStockRefresh = async () => {
                       : "text-gray-600 hover:text-gray-900"
                       }`}
                   >
+                    <Filter size={16} className="inline mr-1" />
                     Wholesale
                   </button>
                 </div>
