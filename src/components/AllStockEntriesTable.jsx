@@ -19,7 +19,6 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
     const [isSaving, setIsSaving] = useState(false);
     const [editForm, setEditForm] = useState({
         seriesStartNumber: "",
-        seriesEndNumber: "",
         chalanNumber: "",
         chalanDate: ""
     });
@@ -115,7 +114,6 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             "Unit Price",
             "Total Value",
             "Series Start",
-            "Series End",
             "Chalan Number",
             "Chalan Date"
         ];
@@ -133,7 +131,6 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                     entry.unitPrice?.toFixed(2) || "",
                     entry.totalValue?.toFixed(2) || "",
                     entry.seriesStartNumber || "",
-                    entry.seriesEndNumber || "",
                     entry.chalanNumber || "",
                     entry.chalanDate || ""
                 ].join(",");
@@ -211,7 +208,6 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         setEditingEntry(entry);
         setEditForm({
             seriesStartNumber: entry.seriesStartNumber || "",
-            seriesEndNumber: entry.seriesEndNumber || "",
             chalanNumber: entry.chalanNumber || "",
             chalanDate: entry.chalanDate || ""
         });
@@ -222,7 +218,6 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         setEditingEntry(null);
         setEditForm({
             seriesStartNumber: "",
-            seriesEndNumber: "",
             chalanNumber: "",
             chalanDate: ""
         });
@@ -237,8 +232,23 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         }
     };
 
+    // Validate Series Start if provided
+    const isSeriesStartValid = (seriesStartValue, quantityValue) => {
+        if (!seriesStartValue.trim()) return true; // Empty is valid (optional field)
+        const tokens = seriesStartValue.split(',').map(token => token.trim()).filter(token => token !== '');
+        return tokens.length === quantityValue;
+    };
+
     const handleEditSave = async () => {
         if (!editingEntry) return;
+        
+        // Validate Series Start
+        const quantityValue = editingEntry.quantityPcs || editingEntry.quantityPackets || editingEntry.quantity || 0;
+        if (!isSeriesStartValid(editForm.seriesStartNumber, quantityValue)) {
+            setError(`Series Start must contain exactly ${quantityValue} comma-separated numbers`);
+            setIsSaving(false);
+            return;
+        }
         
         setIsSaving(true);
         setError("");
@@ -284,17 +294,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                  }
              }
 
-             if (editForm.seriesEndNumber !== "") {
-                 updateExpressions.push("#sen = :sen");
-                 expressionAttributeNames["#sen"] = "SeriesEndNumber";
-                 // Convert to number if possible, otherwise store as string
-                 const endNum = Number(editForm.seriesEndNumber);
-                 if (!isNaN(endNum)) {
-                     expressionAttributeValues[":sen"] = { N: endNum.toString() };
-                 } else {
-                     expressionAttributeValues[":sen"] = { S: editForm.seriesEndNumber };
-                 }
-             }
+
 
             if (editForm.chalanNumber !== "") {
                 updateExpressions.push("#cn = :cn");
@@ -350,7 +350,6 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                     return {
                         ...entry,
                         seriesStartNumber: editForm.seriesStartNumber || entry.seriesStartNumber,
-                        seriesEndNumber: editForm.seriesEndNumber || entry.seriesEndNumber,
                         chalanNumber: editForm.chalanNumber || entry.chalanNumber,
                         chalanDate: editForm.chalanDate || entry.chalanDate
                     };
@@ -364,7 +363,6 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             setEditingEntry(null);
             setEditForm({
                 seriesStartNumber: "",
-                seriesEndNumber: "",
                 chalanNumber: "",
                 chalanDate: ""
             });
@@ -823,7 +821,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                         </div>
                                     </th>
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                                         <div className="flex items-center gap-1">
                                             <span>Series Start</span>
                                             <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -831,14 +829,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                             </svg>
                                         </div>
                                     </th>
-                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        <div className="flex items-center gap-1">
-                                            <span>Series End</span>
-                                            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                    </th>
+
                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         <div className="flex items-center gap-1">
                                             <span>Chalan Number</span>
@@ -898,46 +889,37 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                     </td>
                                             
                                             {/* Series Start Number */}
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            <td className="px-3 py-4 text-sm text-gray-900">
                                                 {editingEntry?.id === entry.id ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.seriesStartNumber}
-                                                        onChange={(e) => setEditForm({...editForm, seriesStartNumber: e.target.value})}
-                                                        className="w-24 px-2 py-1 border rounded text-sm"
-                                                        placeholder="Start"
-                                                        onKeyDown={handleKeyDown}
-                                                    />
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            value={editForm.seriesStartNumber}
+                                                            onChange={(e) => setEditForm({...editForm, seriesStartNumber: e.target.value})}
+                                                            className={`w-64 px-2 py-1 border rounded text-sm ${
+                                                                editForm.seriesStartNumber.trim() && !isSeriesStartValid(editForm.seriesStartNumber, entry.quantityPcs || entry.quantityPackets || entry.quantity || 0) ? 'border-red-500' : ''
+                                                            }`}
+                                                            placeholder="Start"
+                                                            onKeyDown={handleKeyDown}
+                                                        />
+                                                        {editForm.seriesStartNumber.trim() && !isSeriesStartValid(editForm.seriesStartNumber, entry.quantityPcs || entry.quantityPackets || entry.quantity || 0) && (
+                                                            <p className="text-xs text-red-600 mt-1">
+                                                                Must contain exactly {entry.quantityPcs || entry.quantityPackets || entry.quantity || 0} comma-separated numbers
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 ) : (
                                                     <span 
-                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded block max-w-xs truncate"
                                                         onClick={() => handleEditClick(entry)}
+                                                        title={entry.seriesStartNumber || '-'}
                                                     >
                                                         {entry.seriesStartNumber || '-'}
                                                     </span>
                                                 )}
                                             </td>
                                             
-                                            {/* Series End Number */}
-                                            <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {editingEntry?.id === entry.id ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.seriesEndNumber}
-                                                        onChange={(e) => setEditForm({...editForm, seriesEndNumber: e.target.value})}
-                                                        className="w-24 px-2 py-1 border rounded text-sm"
-                                                        placeholder="End"
-                                                        onKeyDown={handleKeyDown}
-                                                    />
-                                                ) : (
-                                                    <span 
-                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
-                                                        onClick={() => handleEditClick(entry)}
-                                                    >
-                                                        {entry.seriesEndNumber || '-'}
-                                                    </span>
-                                                )}
-                                            </td>
+
                                             
                                             {/* Chalan Number */}
                                             <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1039,7 +1021,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="12" className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan="11" className="px-6 py-12 text-center text-gray-500">
                                             {filterDate || filterItemType ? "No stock entries found matching the filters." : "No stock entries found."}
                                         </td>
                                     </tr>
@@ -1166,49 +1148,39 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
 
                                         {/* Editable Fields */}
                                         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                                            {/* Series Start */}
-                                            <div>
-                                                <span className="text-xs text-gray-500">Series Start</span>
-                                                {editingEntry?.id === entry.id ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.seriesStartNumber}
-                                                        onChange={(e) => setEditForm({...editForm, seriesStartNumber: e.target.value})}
-                                                        className="w-full mt-1 px-2 py-1 border rounded text-sm"
-                                                        placeholder="Start"
-                                                        onKeyDown={handleKeyDown}
-                                                    />
-                                                ) : (
-                                                    <div 
-                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded text-sm mt-1"
-                                                        onClick={() => handleEditClick(entry)}
-                                                    >
-                                                        {entry.seriesStartNumber || '-'}
-                                                    </div>
-                                                )}
-                                            </div>
+                                                                                         {/* Series Start */}
+                                             <div>
+                                                 <span className="text-xs text-gray-500">Series Start</span>
+                                                 {editingEntry?.id === entry.id ? (
+                                                     <div>
+                                                         <input
+                                                             type="text"
+                                                             value={editForm.seriesStartNumber}
+                                                             onChange={(e) => setEditForm({...editForm, seriesStartNumber: e.target.value})}
+                                                             className={`w-full mt-1 px-3 py-2 border rounded text-sm ${
+                                                                 editForm.seriesStartNumber.trim() && !isSeriesStartValid(editForm.seriesStartNumber, entry.quantityPcs || entry.quantityPackets || entry.quantity || 0) ? 'border-red-500' : ''
+                                                             }`}
+                                                             placeholder="Start"
+                                                             onKeyDown={handleKeyDown}
+                                                         />
+                                                         {editForm.seriesStartNumber.trim() && !isSeriesStartValid(editForm.seriesStartNumber, entry.quantityPcs || entry.quantityPackets || entry.quantity || 0) && (
+                                                             <p className="text-xs text-red-600 mt-1">
+                                                                 Must contain exactly {entry.quantityPcs || entry.quantityPackets || entry.quantity || 0} comma-separated numbers
+                                                             </p>
+                                                         )}
+                                                     </div>
+                                                 ) : (
+                                                     <div 
+                                                         className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded text-sm mt-1 break-words overflow-hidden"
+                                                         onClick={() => handleEditClick(entry)}
+                                                         title={entry.seriesStartNumber || '-'}
+                                                     >
+                                                         {entry.seriesStartNumber || '-'}
+                                                     </div>
+                                                 )}
+                                             </div>
 
-                                            {/* Series End */}
-                                            <div>
-                                                <span className="text-xs text-gray-500">Series End</span>
-                                                {editingEntry?.id === entry.id ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.seriesEndNumber}
-                                                        onChange={(e) => setEditForm({...editForm, seriesEndNumber: e.target.value})}
-                                                        className="w-full mt-1 px-2 py-1 border rounded text-sm"
-                                                        placeholder="End"
-                                                        onKeyDown={handleKeyDown}
-                                                    />
-                                                ) : (
-                                                    <div 
-                                                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded text-sm mt-1"
-                                                        onClick={() => handleEditClick(entry)}
-                                                    >
-                                                        {entry.seriesEndNumber || '-'}
-                                                    </div>
-                                                )}
-                                            </div>
+
 
                                             {/* Chalan Number */}
                                             <div>

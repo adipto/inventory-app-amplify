@@ -15,6 +15,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
     const [stockType, setStockType] = useState("Wholesale");
     const [quantity, setQuantity] = useState("");
     const [lowStockThreshold, setLowStockThreshold] = useState("1");
+    const [seriesStart, setSeriesStart] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isEdit, setIsEdit] = useState(false);
     const [originalItem, setOriginalItem] = useState(null);
@@ -230,6 +231,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             setStockType(editItem.stockType || "Retail");
             setQuantity(editItem.quantity?.toString() || "");
             setLowStockThreshold(editItem.lowStockThreshold?.toString() || "1");
+            setSeriesStart(editItem.seriesStart || "");
             setDate(editItem.date || new Date().toISOString().split('T')[0]);
             setTime(editItem.time || new Date().toTimeString().slice(0, 5));
 
@@ -278,6 +280,7 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         setStockType("Wholesale");
         setQuantity("");
         setLowStockThreshold("1");
+        setSeriesStart("");
         setIsEdit(false);
         setOriginalItem(null);
         const today = new Date();
@@ -369,6 +372,11 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                     UniqueSuffix: { S: uniqueSuffix }, // Store the unique suffix
                     GSI_PK: { S: "STOCK_ENTRIES" } // Partition key for GSI
                 };
+                
+                // Add Series Start if provided
+                if (seriesStart.trim()) {
+                    stockEntryItem.SeriesStartNumber = { S: seriesStart.trim() };
+                }
                 
                 if (stockType === "Wholesale") {
                     stockEntryItem.Quantity_Packets = { N: Number(quantity).toString() };
@@ -541,11 +549,12 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                             ItemType: { S: itemType },
                             VariationName: { S: variationName }
                         },
-                        UpdateExpression: `SET ${quantityField} = :q, LowStockThreshold = :lst, TotalTransactionQuantity = if_not_exists(TotalTransactionQuantity, :zero)`,
+                        UpdateExpression: `SET ${quantityField} = :q, LowStockThreshold = :lst, TotalTransactionQuantity = if_not_exists(TotalTransactionQuantity, :zero)${seriesStart.trim() ? ', SeriesStartNumber = :ss' : ''}`,
                         ExpressionAttributeValues: {
                             ":q": { N: newQuantity.toString() },
                             ":lst": { N: lowStockThreshold.toString() },
-                            ":zero": { N: "0" }
+                            ":zero": { N: "0" },
+                            ...(seriesStart.trim() && { ":ss": { S: seriesStart.trim() } })
                         }
                     });
 
@@ -567,6 +576,11 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
             Date: { S: date }, // Add the date field
             TotalTransactionQuantity: { N: "0" } // Initialize total transaction quantity to 0
         };
+        
+        // Add Series Start if provided
+        if (seriesStart.trim()) {
+            item.SeriesStartNumber = { S: seriesStart.trim() };
+        }
 
         // Extract unit price from variation name (assuming the pattern)
         let unitPrice = 0;
@@ -625,7 +639,17 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
         // Check if time is valid (not empty)
         const validTime = time && time !== "";
         
-        return allFieldsFilled && validQuantity && validLowStockThreshold && validDate && validTime;
+        // Validate Series Start if provided
+        let validSeriesStart = true;
+        if (seriesStart.trim()) {
+            const tokens = seriesStart.split(',').map(token => token.trim()).filter(token => token !== '');
+            const quantityValue = parseInt(quantity);
+            if (tokens.length !== quantityValue) {
+                validSeriesStart = false;
+            }
+        }
+        
+        return allFieldsFilled && validQuantity && validLowStockThreshold && validDate && validTime && validSeriesStart;
     };
 
     return (
@@ -804,6 +828,29 @@ function AddStockModal({ isOpen, onClose, onStockAdded, editItem }) {
                                                 ? "Enter the total quantity you want to set (not the amount to add)"
                                                 : "For existing items, this quantity will be added to the current stock."}
                                         </p>
+                                    </div>
+
+                                    {/* Series Start */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Series Start</label>
+                                        <input
+                                            type="text"
+                                            value={seriesStart}
+                                            onChange={(e) => setSeriesStart(e.target.value)}
+                                            placeholder="Enter series start number"
+                                            className={`w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                                seriesStart.trim() && !isFormValid() && seriesStart.split(',').map(token => token.trim()).filter(token => token !== '').length !== parseInt(quantity) ? 'border-red-500 focus:ring-red-500' : ''
+                                            }`}
+                                            disabled={isLoading}
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Optional: Enter the starting number for this stock series
+                                        </p>
+                                        {seriesStart.trim() && seriesStart.split(',').map(token => token.trim()).filter(token => token !== '').length !== parseInt(quantity) && (
+                                            <p className="text-xs text-red-600 mt-1">
+                                                Series Start must contain exactly {quantity} comma-separated numbers
+                                            </p>
+                                        )}
                                     </div>
 
                                     {/* Low Stock Threshold */}

@@ -429,8 +429,8 @@ function TransactionTableView({
                             value={editingNoteValue}
                             onChange={(e) => setEditingNoteValue(e.target.value)}
                             onKeyDown={(e) => handleKeyDown(e, transaction)}
-                            className="w-24 px-2 py-1 text-xs border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="Enter notes..."
+                            className="w-48 px-3 py-2 text-sm border-2 border-blue-300 rounded-lg bg-blue-50 focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none placeholder-gray-500"
+                            placeholder="Type your note here..."
                             autoFocus
                           />
                           <button
@@ -612,8 +612,8 @@ function TransactionTableView({
                       value={editingNoteValue}
                       onChange={(e) => setEditingNoteValue(e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, transaction)}
-                      className="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter notes..."
+                      className="w-full px-4 py-3 text-sm border-2 border-blue-300 rounded-lg bg-blue-50 focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none placeholder-gray-500"
+                      placeholder="Type your note here..."
                       autoFocus
                     />
                     <div className="flex space-x-2">

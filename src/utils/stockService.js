@@ -504,7 +504,6 @@ export const fetchStockEntries = async (token, page = 1, limit = 10, lastEvaluat
                 timestampDisplay: item.Timestamp?.N ? new Date(Number(item.Timestamp.N)).toLocaleString() : 'N/A',
                 // Additional editable fields
                 seriesStartNumber: item.SeriesStartNumber?.S || item.SeriesStartNumber?.N ? (item.SeriesStartNumber.S || item.SeriesStartNumber.N.toString()) : null,
-                seriesEndNumber: item.SeriesEndNumber?.S || item.SeriesEndNumber?.N ? (item.SeriesEndNumber.S || item.SeriesEndNumber.N.toString()) : null,
                 chalanNumber: item.ChalanNumber?.S || null,
                 chalanDate: item.ChalanDate?.S || null,
                 // PreviousTotalInvestment field for capital management tracking
