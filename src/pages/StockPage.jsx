@@ -19,10 +19,10 @@ function StockPage() {
   const [activeTab, setActiveTab] = useState("wholesale"); // can be 'all', 'retail', 'wholesale'
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: "itemType", direction: "ascending" });
-  const [showLowStock, setShowLowStock] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isLowStockModalOpen, setIsLowStockModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [retailStock, setRetailStock] = useState([]);
   const [wholesaleStock, setWholesaleStock] = useState([]);
@@ -176,12 +176,37 @@ function StockPage() {
   };
 
   // Pagination logic
-  const filteredAndSortedStock =
-    activeTab === "all"
+  const filteredAndSortedStock = (() => {
+    let stock = activeTab === "all"
       ? [...retailStock, ...wholesaleStock]
       : activeTab === "retail"
       ? retailStock
       : wholesaleStock;
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      stock = stock.filter(item =>
+        item.itemType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.variationName.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply sorting
+    stock.sort((a, b) => {
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
+      
+      if (aValue < bValue) {
+        return sortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+    
+    return stock;
+  })();
   const totalItems = filteredAndSortedStock.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const paginatedStock = filteredAndSortedStock.slice(
@@ -192,7 +217,7 @@ function StockPage() {
   // Reset to first page when filters/search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, showLowStock, activeTab]);
+  }, [searchQuery, activeTab]); // activeTab dependency removed
 
   // Show loading while checking authentication
   if (authLoading) {
@@ -246,6 +271,21 @@ function StockPage() {
   };
 
   const handleSearch = (e) => setSearchQuery(e.target.value);
+
+  // Get all low stock items for the modal
+  const getAllLowStockItems = () => {
+    // Add retail items with stock type
+    const retailItems = retailStock
+      .filter(item => item.quantity <= item.lowStockThreshold)
+      .map(item => ({ ...item, stockType: 'Retail' }));
+    
+    // Add wholesale items with stock type
+    const wholesaleItems = wholesaleStock
+      .filter(item => item.quantity <= item.lowStockThreshold)
+      .map(item => ({ ...item, stockType: 'Wholesale' }));
+    
+    return [...retailItems, ...wholesaleItems];
+  };
 
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -545,12 +585,8 @@ const handleAllStockRefresh = async () => {
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2 mt-2 md:mt-0">
                   <button
-                    onClick={() => setShowLowStock(!showLowStock)}
-                    className={`px-1.5 py-1 rounded border text-xs font-medium transition-colors ${
-                      showLowStock
-                        ? "bg-orange-50 border-orange-300 text-orange-700"
-                        : "bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100"
-                    }`}
+                    onClick={() => setIsLowStockModalOpen(true)}
+                    className="px-1.5 py-1 rounded border text-xs font-medium transition-colors bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100"
                   >
                     <AlertCircle size={10} className="mr-0.5" />
                     Low Stock
@@ -702,7 +738,7 @@ const handleAllStockRefresh = async () => {
                           const isLowStock = item.quantity <= item.lowStockThreshold;
 
                           return (
-                            <tr key={item.id} className={`hover:bg-gray-50 TK {isLowStock ? 'bg-amber-50' : ''}`}>
+                            <tr key={item.id} className={`hover:bg-gray-50 ${isLowStock ? 'bg-amber-50' : ''}`}>
                               <td className="px-3 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900">{item.itemType}</div>
                               </td>
@@ -840,7 +876,7 @@ const handleAllStockRefresh = async () => {
                         <button
                           key={page}
                           onClick={() => handlePageChange(page)}
-                          className={`px-3 py-1 rounded border TK {page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                          className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                         >
                           {page}
                         </button>
@@ -876,7 +912,7 @@ const handleAllStockRefresh = async () => {
                         const isLowStock = item.quantity <= item.lowStockThreshold;
 
                         return (
-                          <div key={item.id} className={`p-4 TK {isLowStock ? "bg-amber-50" : "bg-white"}`}>
+                          <div key={item.id} className={`p-4 ${isLowStock ? "bg-amber-50" : "bg-white"}`}>
                             <div className="flex justify-between items-start mb-3">
                               <div>
                                 <h3 className="font-medium text-gray-900">{item.itemType}</h3>
@@ -1005,7 +1041,7 @@ const handleAllStockRefresh = async () => {
                         <button
                           key={page}
                           onClick={() => handlePageChange(page)}
-                          className={`px-3 py-1 rounded border TK {page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                          className={`px-3 py-1 rounded border ${page === currentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
                         >
                           {page}
                         </button>
@@ -1074,6 +1110,159 @@ const handleAllStockRefresh = async () => {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={confirmDeleteItem}
       />
+
+      {/* Low Stock Modal */}
+      {isLowStockModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Low Stock Items</h2>
+              <button
+                onClick={() => setIsLowStockModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-auto max-h-[calc(90vh-120px)]">
+              {(() => {
+                const lowStockItems = getAllLowStockItems();
+                if (lowStockItems.length === 0) {
+                  return (
+                    <div className="text-center py-8">
+                      <AlertCircle size={48} className="text-green-500 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Low Stock Items</h3>
+                      <p className="text-gray-500">All items are above their low stock threshold.</p>
+                    </div>
+                  );
+                }
+                
+                                 return (
+                   <>
+                     {/* Desktop Table */}
+                     <div className="hidden md:block overflow-x-auto">
+                       <table className="min-w-full divide-y divide-gray-200">
+                         <thead className="bg-gray-50">
+                           <tr>
+                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                               Item Type
+                             </th>
+                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                               Variation
+                             </th>
+                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                               Current Quantity
+                             </th>
+                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                               Low Stock Threshold
+                             </th>
+                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                               Stock Type
+                             </th>
+                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                               Unit Price
+                             </th>
+                           </tr>
+                         </thead>
+                         <tbody className="bg-white divide-y divide-gray-200">
+                           {lowStockItems.map((item, index) => (
+                             <tr key={index} className="hover:bg-gray-50">
+                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                 {item.itemType}
+                               </td>
+                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                 {item.variationName}
+                               </td>
+                               <td className="px-6 py-4 whitespace-nowrap">
+                                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                   {item.quantity}
+                                 </span>
+                               </td>
+                               <td className="px-6 py-4 whitespace-nowrap">
+                                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                                   {item.lowStockThreshold}
+                                 </span>
+                               </td>
+                               <td className="px-6 py-4 whitespace-nowrap">
+                                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                   {item.stockType}
+                                 </span>
+                               </td>
+                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                 BDT {item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}
+                               </td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                     </div>
+
+                     {/* Mobile Card View */}
+                     <div className="md:hidden space-y-4">
+                       {lowStockItems.map((item, index) => (
+                         <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                           <div className="flex justify-between items-start mb-3">
+                             <div className="flex-1 min-w-0">
+                               <h3 className="font-medium text-gray-900 text-sm truncate">{item.itemType}</h3>
+                               <p className="text-xs text-gray-600 mt-1 break-words">{item.variationName}</p>
+                             </div>
+                             <div className="ml-2 flex-shrink-0">
+                               <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                 {item.stockType}
+                               </span>
+                             </div>
+                           </div>
+                           
+                           <div className="grid grid-cols-2 gap-3 text-xs">
+                             <div>
+                               <span className="text-gray-500 font-medium">Current Qty:</span>
+                               <div className="mt-1">
+                                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                   {item.quantity}
+                                 </span>
+                               </div>
+                             </div>
+                             
+                             <div>
+                               <span className="text-gray-500 font-medium">Threshold:</span>
+                               <div className="mt-1">
+                                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                                   {item.lowStockThreshold}
+                                 </span>
+                               </div>
+                             </div>
+                           </div>
+                           
+                           <div className="mt-3 pt-3 border-t border-gray-200">
+                             <div className="flex justify-between items-center">
+                               <span className="text-gray-500 font-medium text-xs">Unit Price:</span>
+                               <span className="text-sm font-medium text-gray-900">
+                                 BDT {item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}
+                               </span>
+                             </div>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   </>
+                 );
+              })()}
+            </div>
+            
+            <div className="flex justify-end p-6 border-t border-gray-200">
+              <button
+                onClick={() => setIsLowStockModalOpen(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
