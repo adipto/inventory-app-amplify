@@ -8,7 +8,7 @@ import PageHeader from "../components/PageHeader";
 import DeleteConfirmModal from "../utils/DeleteConfirmModal";
 import { fetchStock, deleteStockItem, fetchStockEntries } from "../utils/stockService";
 import {
-  LogOut, Plus, Search, Filter, ArrowUpDown,
+  LogOut, Plus, PlusCircle, Search, Filter, ArrowUpDown,
   Download, MoreVertical, Edit, Trash2, Package, AlertCircle,
   RefreshCw, Eye
 } from "lucide-react";
@@ -394,7 +394,7 @@ function StockPage() {
       headers.join(","),
       ...filteredAndSortedStock.map(item => {
         const totalValue = calculateTotalValue(item);
-        return `"TK {item.itemType}","TK {item.variationName}",TK {item.quantity},TK {item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"},TK {totalValue.toFixed(2)},TK {item.totalTransactionQuantity || 0}`;
+        return `"${item.itemType}","${item.variationName}","${item.quantity}","${item.unitPrice ? item.unitPrice.toFixed(2) : "0.00"}","${totalValue.toFixed(2)}","${item.totalTransactionQuantity || 0}"`;
       })
     ].join("\n");
 
@@ -403,7 +403,7 @@ function StockPage() {
     const a = document.createElement('a');
     a.setAttribute('hidden', '');
     a.setAttribute('href', url);
-    a.setAttribute('download', `TK {activeTab}-stock-TK {new Date().toISOString().split('T')[0]}.csv`);
+    a.setAttribute('download', `${activeTab}-stock-${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -579,10 +579,10 @@ const handleAllStockRefresh = async () => {
                         setItemToEdit(null);
                         setIsAddModalOpen(true);
                       }}
-                      className="px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors"
+                      className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
                     >
-                      <Plus size={10} className="mr-0.5" />
-                      New
+                      <PlusCircle size={16} className="mr-1" />
+                      <span>New</span>
                     </button>
                   )}
 
@@ -592,10 +592,10 @@ const handleAllStockRefresh = async () => {
                         setItemToEdit(null);
                         setIsAddModalOpen(true);
                       }}
-                      className="px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors"
+                      className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
                     >
-                      <Plus size={10} className="mr-0.5" />
-                      New
+                      <PlusCircle size={16} className="mr-1" />
+                      <span>New</span>
                     </button>
                   )}
                 </div>

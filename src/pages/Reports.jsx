@@ -96,40 +96,42 @@ const DateSelector = ({ selectedMonth, selectedYear, onMonthChange, onYearChange
     const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
     return (
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6">
             <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Select Period:</span>
             </div>
             
-            <div className="relative">
-                <select
-                    value={selectedMonth}
-                    onChange={(e) => onMonthChange(parseInt(e.target.value))}
-                    className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                    {months.map((month) => (
-                        <option key={month.value} value={month.value}>
-                            {month.label}
-                        </option>
-                    ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="relative">
+                    <select
+                        value={selectedMonth}
+                        onChange={(e) => onMonthChange(parseInt(e.target.value))}
+                        className="w-full sm:w-auto appearance-none bg-white border border-gray-300 rounded-lg px-3 sm:px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        {months.map((month) => (
+                            <option key={month.value} value={month.value}>
+                                {month.label}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
 
-            <div className="relative">
-                <select
-                    value={selectedYear}
-                    onChange={(e) => onYearChange(parseInt(e.target.value))}
-                    className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                    {years.map((year) => (
-                        <option key={year} value={year}>
-                            {year}
-                        </option>
-                    ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                <div className="relative">
+                    <select
+                        value={selectedYear}
+                        onChange={(e) => onYearChange(parseInt(e.target.value))}
+                        className="w-full sm:w-auto appearance-none bg-white border border-gray-300 rounded-lg px-3 sm:px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        {years.map((year) => (
+                            <option key={year} value={year}>
+                                {year}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
             </div>
         </div>
     );
@@ -578,10 +580,10 @@ function EnhancedReportsPage() {
                 <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
                     <div className="max-w-7xl mx-auto p-6">
                         {/* Header */}
-                        <div className="mb-8">
-                            <div className="flex items-center justify-between">
+                        <div className="mb-12">
+                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                                 <div>
-                                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                                    <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
                                         Sales Analytics Dashboard
                                     </h1>
                                     <p className="text-gray-600">
@@ -595,7 +597,7 @@ function EnhancedReportsPage() {
                                     <button
                                         onClick={handleBackToMonthlyReports}
                                         disabled={dataLoading}
-                                        className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                                        className="w-full lg:w-auto flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white px-4 lg:px-6 py-3 rounded-lg font-medium transition-colors"
                                     >
                                         Back to Monthly Reports
                                     </button>
@@ -603,7 +605,7 @@ function EnhancedReportsPage() {
                                     <button
                                         onClick={handleGenerateAllTimeReports}
                                         disabled={dataLoading}
-                                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                                        className="w-full lg:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 lg:px-6 py-2 lg:py-3 rounded-lg font-medium transition-colors"
                                     >
                                         <FileText className="w-5 h-5" />
                                         {dataLoading ? 'Loading...' : 'Generate All Time Reports'}
@@ -615,7 +617,7 @@ function EnhancedReportsPage() {
                                                          {/* === Year-only section (only visible on monthly page) === */}
                              {!isAllTime && (
                                  <React.Fragment>
-                                     <div className="mb-6">
+                                     <div className="mt-8 mb-6">
                                          <div className="flex items-center gap-3 mb-3">
                                              <Calendar className="w-5 h-5 text-gray-500" />
                                              <span className="text-sm font-medium text-gray-700">Year-only:</span>
@@ -818,7 +820,7 @@ function EnhancedReportsPage() {
                                                     const maxQuantity = Math.max(...top10.map(p => p.quantity), 1);
                                                     return (
                                                         <>
-                                                            <ResponsiveContainer width="100%" minWidth={400} height={350}>
+                                                            <ResponsiveContainer width="100%" height={350}>
                                                                     <BarChart
                                                                      data={top10}
                                                                      layout="vertical"
@@ -840,9 +842,9 @@ function EnhancedReportsPage() {
                                                                         type="category"
                                                                         stroke="#64748b"
                                                                         fontSize={12}
-                                                                        width={180}
+                                                                        width={120}
                                                                         label={{ value: 'Product Name', angle: -90, position: 'insideLeft' }}
-                                                                        tickFormatter={(value) => value.length > 30 ? value.substring(0, 30) + '...' : value}
+                                                                        tickFormatter={(value) => value.length > 20 ? value.substring(0, 20) + '...' : value}
                                                                     />
                                                                     <Tooltip
                                                                         content={({ active, payload, label }) => {
@@ -875,11 +877,11 @@ function EnhancedReportsPage() {
                                                                 </BarChart>
                                                             </ResponsiveContainer>
                                                             {/* Custom Legend Below Chart */}
-                                                            <div className="flex flex-wrap gap-4 mt-6 justify-center">
+                                                            <div className="flex flex-wrap gap-2 sm:gap-4 mt-6 justify-center">
                                                                 {top10.map((entry, index) => (
-                                                                    <div key={entry.product} className="flex items-center gap-2 max-w-xs" title={entry.product}>
-                                                                        <span style={{ backgroundColor: COLORS[index % COLORS.length], width: 18, height: 18, display: 'inline-block', borderRadius: 4, border: '1px solid #e5e7eb' }}></span>
-                                                                        <span className="truncate max-w-[140px] text-sm" style={{ display: 'inline-block', verticalAlign: 'middle' }}>{entry.product.length > 25 ? entry.product.slice(0, 25) + '…' : entry.product}</span>
+                                                                    <div key={entry.product} className="flex items-center gap-2 max-w-[120px] sm:max-w-xs" title={entry.product}>
+                                                                        <span style={{ backgroundColor: COLORS[index % COLORS.length], width: 16, height: 16, display: 'inline-block', borderRadius: 4, border: '1px solid #e5e7eb' }}></span>
+                                                                        <span className="truncate max-w-[90px] sm:max-w-[140px] text-xs sm:text-sm" style={{ display: 'inline-block', verticalAlign: 'middle' }}>{entry.product.length > 20 ? entry.product.slice(0, 20) + '…' : entry.product}</span>
                                                                     </div>
                                                                 ))}
                                                             </div>

@@ -355,45 +355,44 @@ function CustomerList() {
                 <main className="p-3 sm:p-6 max-w-7xl mx-auto">
                     {/* Filter + Search */}
                     <div className="mb-4 sm:mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm">
-                        <div className="space-y-3 sm:space-y-0 sm:flex sm:justify-between sm:items-center sm:gap-4">
+                        <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
                             <div className="space-y-2">
                                 <h2 className="text-lg font-medium text-gray-700">
                                     Customer Database
                                 </h2>
-                                <div className="flex items-center bg-gray-100 rounded-lg p-1 w-full sm:w-auto">
-                                    <button
-                                        onClick={handleResetFilter}
-                                        className={`flex-1 sm:flex-none px-3 py-1.5 text-sm rounded-md transition-colors ${activeFilter === "all"
-                                            ? "bg-white text-blue-600 shadow-sm"
-                                            : "text-gray-600 hover:bg-gray-200"
-                                            }`}
-                                    >
-                                        All
-                                    </button>
-                                    <button
-                                        onClick={handleRetailClick}
-                                        className={`flex-1 sm:flex-none flex items-center justify-center px-3 py-1.5 text-sm rounded-md transition-colors ${activeFilter === "retail"
-                                            ? "bg-white text-blue-600 shadow-sm"
-                                            : "text-gray-600 hover:bg-gray-200"
-                                            }`}
-                                    >
-                                        <Filter size={14} className="mr-1" />
-                                        Retail
-                                    </button>
-                                    <button
-                                        onClick={handleWholesaleClick}
-                                        className={`flex-1 sm:flex-none flex items-center justify-center px-3 py-1.5 text-sm rounded-md transition-colors ${activeFilter === "wholesale"
-                                            ? "bg-white text-blue-600 shadow-sm"
-                                            : "text-gray-600 hover:bg-gray-200"
-                                            }`}
-                                    >
-                                        <Filter size={14} className="mr-1" />
-                                        Wholesale
-                                    </button>
-                                </div>
                             </div>
-
-                            <div className="relative w-full sm:max-w-xs">
+                            <div className="flex items-center bg-gray-100 rounded-lg p-1 w-full sm:w-auto">
+                                <button
+                                    onClick={handleResetFilter}
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 text-sm rounded-md transition-colors ${activeFilter === "all"
+                                        ? "bg-white text-blue-600 shadow-sm"
+                                        : "text-gray-600 hover:bg-gray-200"
+                                        }`}
+                                >
+                                    All
+                                </button>
+                                <button
+                                    onClick={handleRetailClick}
+                                    className={`flex-1 sm:flex-none flex items-center justify-center px-3 py-1.5 text-sm rounded-md transition-colors ${activeFilter === "retail"
+                                        ? "bg-white text-blue-600 shadow-sm"
+                                        : "text-gray-600 hover:bg-gray-200"
+                                        }`}
+                                >
+                                    <Filter size={14} className="mr-1" />
+                                    Retail
+                                </button>
+                                <button
+                                    onClick={handleWholesaleClick}
+                                    className={`flex-1 sm:flex-none flex items-center justify-center px-3 py-1.5 text-sm rounded-md transition-colors ${activeFilter === "wholesale"
+                                        ? "bg-white text-blue-600 shadow-sm"
+                                        : "text-gray-600 hover:bg-gray-200"
+                                        }`}
+                                >
+                                    <Filter size={14} className="mr-1" />
+                                    Wholesale
+                                </button>
+                            </div>
+                            <div className="relative flex-1 max-w-md">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Search size={16} className="text-gray-400" />
                                 </div>
@@ -404,6 +403,22 @@ function CustomerList() {
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
+                            </div>
+                            <div className="ml-auto">
+                                <button
+                                    onClick={openModal}
+                                    className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition sm:hidden w-full justify-center"
+                                >
+                                    <UserPlus size={16} className="mr-1" />
+                                    <span>Add New Customer</span>
+                                </button>
+                                <button
+                                    onClick={openModal}
+                                    className="hidden sm:flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+                                >
+                                    <UserPlus size={16} className="mr-1" />
+                                    <span>New</span>
+                                </button>
                             </div>
                         </div>
                     </div>

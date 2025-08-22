@@ -690,7 +690,7 @@ function CapitalManagementTable() {
                 ) : (
                   <>
                     <DollarSign size={16} className="mr-2" />
-                    Calculate All-Time Profit
+                    Calculate All-Time Profit Taken
                   </>
                 )}
               </button>

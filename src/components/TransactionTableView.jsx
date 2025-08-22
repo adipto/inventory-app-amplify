@@ -11,6 +11,7 @@ import {
   Check,
   X,
   Filter,
+  List,
 } from "lucide-react";
 import React, { useState } from "react";
 
@@ -201,51 +202,86 @@ function TransactionTableView({
     .toFixed(2);
 
   // Export transactions to CSV
-  const handleExportData = () => {
-    const headers = [
-      "Date/Time",
-      "Customer",
-      "Type",
-      "Product",
-      "Variation",
-      "Quantity",
-      "COGS (Per Piece)",
-      "Selling Price",
-      "Total Product Cost",
-      "Total Amount Charged",
-      "Net Profit",
-      "Notes"
-    ];
+  const handleExportData = async () => {
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+      
+      // Fetch ALL transactions from database regardless of pagination/filters
+      const { fetchRetailTransactions, fetchWholesaleTransactions } = await import("../utils/fetchTransactions");
+      
+      // Fetch both retail and wholesale transactions
+      const [retailTransactions, wholesaleTransactions] = await Promise.all([
+        fetchRetailTransactions(token, 10000, null),
+        fetchWholesaleTransactions(token, 10000, null)
+      ]);
+      
+      // Combine all transactions
+      const allTransactions = [
+        ...retailTransactions.items.map(item => ({ ...item, type: "retail" })),
+        ...wholesaleTransactions.items.map(item => ({ ...item, type: "wholesale" }))
+      ];
+      
+      const headers = [
+        "Date/Time",
+        "Customer",
+        "Type",
+        "Product",
+        "Variation",
+        "Quantity",
+        "COGS (Per Piece)",
+        "Selling Price",
+        "Total Product Cost",
+        "Total Amount Charged",
+        "Net Profit",
+        "Notes"
+      ];
 
-    const csvData = [
-      headers.join(","),
-      ...displayTransactions.map(transaction => {
-        return [
-          transaction.Date + " " + (transaction.Time || ""),
-          customerDetails[transaction.CustomerID]?.Name || transaction.CustomerID,
-          transaction.type || transactionType,
-          transaction.ProductName || "",
-          transaction.ProductVariation || "",
-          transaction.quantity || "",
-          transaction.cogs || "",
-          transaction.sellingPrice || "",
-          calculateTotalProductCost(transaction),
-          calculateTotalAmountCharged(transaction),
-          calculateNetProfit(transaction),
-          transaction.Notes || ""
-        ].map(field => `"${field}"`).join(",");
-      })
-    ].join("\n");
+      const csvData = [
+        headers.join(","),
+        ...allTransactions.map(transaction => {
+          // Extract the correct data fields based on transaction type
+          const quantity = transaction.Quantity_Pcs || transaction.Quantity_Packets || transaction.quantity || 0;
+          const cogs = transaction.COGS_Per_Pc || transaction.COGS_Per_Packet || transaction.cogs || 0;
+          const sellingPrice = transaction.SellingPrice_Per_Pc || transaction.SellingPrice_Per_Packet || transaction.sellingPrice || 0;
+          
+          // Calculate values manually to avoid NaN
+          // For wholesale: quantity × cogs × 500 (since wholesale is in packets of 500)
+          // For retail: quantity × cogs (since retail is per piece)
+          const totalProductCost = transaction.type === "wholesale" ? quantity * cogs * 500 : quantity * cogs;
+          const totalAmountCharged = quantity * sellingPrice;
+          const netProfit = totalAmountCharged - totalProductCost;
+          
+          return [
+            transaction.Date + " " + (transaction.Time || ""),
+            customerDetails[transaction.CustomerID]?.Name || transaction.CustomerID,
+            transaction.type || transactionType,
+            transaction.ProductName || "",
+            transaction.ProductVariation || "",
+            quantity,
+            cogs,
+            sellingPrice,
+            totalProductCost.toFixed(2),
+            totalAmountCharged.toFixed(2),
+            netProfit.toFixed(2),
+            transaction.Notes || ""
+          ].map(field => `"${field}"`).join(",");
+        })
+      ].join("\n");
 
-    const blob = new Blob([csvData], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `transactions-${transactionType}-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+      const blob = new Blob([csvData], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `all-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      alert("Failed to export data. Please try again.");
+    }
   };
 
   // Render empty state
@@ -301,7 +337,7 @@ function TransactionTableView({
                     </svg>
                   </div>
                 </th>
-                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-40">
                   <div className="flex items-center gap-1">
                     <span>Customer</span>
                     <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -309,14 +345,7 @@ function TransactionTableView({
                     </svg>
                   </div>
                 </th>
-                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-16">
-                  <div className="flex items-center gap-1">
-                    <span>Type</span>
-                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </th>
+
                 <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-40">
                   <div className="flex items-center gap-1">
                     <span>Product</span>
@@ -341,6 +370,24 @@ function TransactionTableView({
                     </svg>
                   </div>
                 </th>
+
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
+                  <div className="flex items-center gap-1">
+                    <span>Price Per Packet</span>
+                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
+                  <span>Total Charge</span>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
+                  <span>Total Cost</span>
+                </th>
+                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
+                  <span>Profit</span>
+                </th>
                 <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
                   <div className="flex items-center gap-1">
                     <span>Notes</span>
@@ -348,23 +395,6 @@ function TransactionTableView({
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </div>
-                </th>
-                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
-                  <div className="flex items-center gap-1">
-                    <span>Price</span>
-                    <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </th>
-                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-28">
-                  <span>Total</span>
-                </th>
-                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-28">
-                  <span>Cost</span>
-                </th>
-                <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">
-                  <span>Profit</span>
                 </th>
                 {isAdmin && (
                   <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-20">
@@ -386,25 +416,15 @@ function TransactionTableView({
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-col">
-                        <div className="text-sm font-medium text-gray-900 truncate max-w-28">
+                        <div className="text-sm font-medium text-gray-900 truncate max-w-36">
                           {customer.Name || "Unknown"}
                         </div>
-                        <div className="text-xs text-gray-500 truncate max-w-28">
+                        <div className="text-xs text-gray-500 truncate max-w-36">
                           {customer.PhoneNumber || "-"}
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-3">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          transaction.type === "retail"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-indigo-100 text-indigo-800"
-                        }`}
-                      >
-                        {transaction.type === "retail" ? "R" : "W"}
-                      </span>
-                    </td>
+
                     <td className="px-3 py-3 text-sm text-gray-600">
                       <div className="flex flex-col">
                         <span className="font-medium truncate max-w-36">{transaction.ProductName}</span>
@@ -419,6 +439,31 @@ function TransactionTableView({
                     <td className="px-3 py-3 text-sm text-right">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
                         {formatCurrency(transaction.cogs)}
+                      </span>
+                    </td>
+
+                    <td className="px-3 py-3 text-sm text-right">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                        {formatCurrency(transaction.sellingPrice)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-right">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {formatCurrency(calculateTotalAmountCharged(transaction))}
+                      </span>
+                    </td>
+                                         <td className="px-3 py-3 text-sm text-right">
+                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                         {formatCurrency(calculateTotalProductCost(transaction))}
+                       </span>
+                     </td>
+                    <td className="px-3 py-3 text-sm font-semibold text-right">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        calculateNetProfit(transaction) >= 0 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {formatCurrency(calculateNetProfit(transaction))}
                       </span>
                     </td>
                     <td className="px-3 py-3 text-sm text-gray-600">
@@ -475,30 +520,6 @@ function TransactionTableView({
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-sm text-right">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                        {formatCurrency(transaction.sellingPrice)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-sm text-right">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {formatCurrency(calculateTotalAmountCharged(transaction))}
-                      </span>
-                    </td>
-                                         <td className="px-3 py-3 text-sm text-right">
-                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                         {formatCurrency(calculateTotalProductCost(transaction))}
-                       </span>
-                     </td>
-                    <td className="px-3 py-3 text-sm font-semibold text-right">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        calculateNetProfit(transaction) >= 0 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {formatCurrency(calculateNetProfit(transaction))}
-                      </span>
-                    </td>
                     {isAdmin && (
                       <td className="px-3 py-3 text-sm text-gray-500">
                         <div className="flex space-x-1">
@@ -545,15 +566,7 @@ function TransactionTableView({
                     <h3 className="text-lg font-semibold text-gray-900 truncate">
                       {customer.Name || "Unknown"}
                     </h3>
-                    <span
-                      className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        transaction.type === "retail"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-indigo-100 text-indigo-800"
-                      }`}
-                    >
-                      {transaction.type === "retail" ? "Retail" : "Wholesale"}
-                    </span>
+
                   </div>
                   <div className="text-sm text-gray-600">
                     📞 {customer.PhoneNumber || "No phone"}
@@ -700,47 +713,51 @@ function TransactionTableView({
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       {/* Transaction Filters and Controls */}
-      <div className="p-4 border-b flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="hidden md:flex bg-gray-100 p-1 rounded-lg">
-          <button
-            onClick={() => onTransactionTypeChange("all")}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-              transactionType === "all"
-                ? "bg-white text-blue-600 shadow-sm"
-                : "text-gray-700 hover:bg-white hover:shadow-sm"
-            }`}
-          >
-            <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-            All
-          </button>
-          <button
-            onClick={() => onTransactionTypeChange("retail")}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-              transactionType === "retail"
-                ? "bg-white text-blue-600 shadow-sm"
-                : "text-gray-700 hover:bg-white hover:shadow-sm"
-            }`}
-          >
-            <Filter size={16} className="inline mr-1" />
-            Retail
-          </button>
-          <button
-            onClick={() => onTransactionTypeChange("wholesale")}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-              transactionType === "wholesale"
-                ? "bg-white text-blue-600 shadow-sm"
-                : "text-gray-700 hover:bg-white hover:shadow-sm"
-            }`}
-          >
-            <Filter size={16} className="inline mr-1" />
-            Wholesale
-          </button>
+      <div className="p-3 sm:p-4 border-b">
+        {/* Filter Buttons - Mobile Optimized */}
+        <div className="mb-4 sm:mb-0">
+          <div className="flex rounded-lg bg-gray-100 p-1 w-full sm:w-auto overflow-hidden">
+            <button
+              onClick={() => onTransactionTypeChange("all")}
+              className={`flex-1 sm:flex-none px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                transactionType === "all"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => onTransactionTypeChange("retail")}
+              className={`flex-1 sm:flex-none px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                transactionType === "retail"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <Filter size={14} className="inline mr-1 sm:mr-1" />
+              <span className="hidden sm:inline">Retail</span>
+              <span className="sm:hidden">R</span>
+            </button>
+            <button
+              onClick={() => onTransactionTypeChange("wholesale")}
+              className={`flex-1 sm:flex-none px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                transactionType === "wholesale"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <Filter size={14} className="inline mr-1 sm:mr-1" />
+              <span className="hidden sm:inline">Wholesale</span>
+              <span className="sm:hidden">W</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-96">
+        {/* Search and Action Buttons - Mobile Optimized */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-2 w-full">
+          {/* Search Bar */}
+          <div className="relative flex-1 min-w-0">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search size={16} className="text-gray-400" />
             </div>
@@ -749,15 +766,17 @@ function TransactionTableView({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by customer name or phone number..."
-              className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
             />
           </div>
 
-          <button
-            onClick={onRefresh}
-            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md"
-            title="Refresh data"
-          >
+          {/* Action Buttons Row */}
+          <div className="flex items-center justify-center sm:justify-end gap-2 flex-shrink-0">
+            <button
+              onClick={onRefresh}
+              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md"
+              title="Refresh data"
+            >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5"
@@ -774,22 +793,24 @@ function TransactionTableView({
 
                      <button
              onClick={handleExportData}
-             className="px-3 py-2 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-sm font-medium transition-colors"
+              className="px-2 sm:px-3 py-2 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-xs sm:text-sm font-medium transition-colors"
              title="Export transactions"
            >
              <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
              </svg>
-             Export
+              <span className="hidden sm:inline">Export</span>
+              <span className="sm:hidden">Exp</span>
            </button>
 
-          <button
-            onClick={onNewTransaction}
-            className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-          >
-            <PlusCircle size={16} className="mr-1" />
-            <span>New</span>
-          </button>
+            <button
+              onClick={onNewTransaction}
+              className="flex items-center px-2 sm:px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition text-xs sm:text-sm font-medium"
+            >
+              <PlusCircle size={16} className="mr-1" />
+              <span>New</span>
+            </button>
+          </div>
         </div>
       </div>
 

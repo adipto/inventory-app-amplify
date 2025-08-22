@@ -2,6 +2,7 @@ import React, { useState, useEffect, forwardRef, useImperativeHandle } from "rea
 import { deleteStockItem, updateMainStock, fetchStockEntries, deductFromMainStock } from "../utils/stockService";
 import { fetchAuthSession } from "aws-amplify/auth";
 import DeleteConfirmModal from "../utils/DeleteConfirmModal";
+import { RefreshCw, Download } from "lucide-react";
 
 const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, ref) => {
     const [entries, setEntries] = useState([]);
@@ -103,7 +104,15 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         }
     };
 
-    const handleExportData = () => {
+    const handleExportData = async () => {
+        try {
+            const session = await fetchAuthSession();
+            const token = session.tokens?.idToken?.toString() || session.tokens?.accessToken?.toString();
+            
+            // Use the same data source that the table displays (but get all entries, not just current page)
+            const { fetchStockEntries } = await import("../utils/stockService");
+            const allEntries = await fetchStockEntries(token, 1, 10000, null);
+            
         const headers = [
             "Date & Time",
             "Item Type",
@@ -118,9 +127,14 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
             "Chalan Date"
         ];
 
+            // Debug: Log the first entry to see the actual data structure
+            if (allEntries.entries.length > 0) {
+                console.log("First entry data structure:", allEntries.entries[0]);
+            }
+
         const csvData = [
             headers.join(","),
-            ...filteredEntries.map(entry => {
+                       ...allEntries.entries.map(entry => {
                 return [
                     entry.timestampDisplay || "",
                     entry.itemType || "",
@@ -133,7 +147,7 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                     entry.seriesStartNumber || "",
                     entry.chalanNumber || "",
                     entry.chalanDate || ""
-                ].join(",");
+                           ].map(field => `"${field}"`).join(",");
             })
         ].join("\n");
 
@@ -146,6 +160,9 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Error exporting data:", error);
+        }
     };
 
     const handlePageChange = async (newPage) => {
@@ -700,23 +717,23 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                 </div>
             ) : (
                 <>
-                    <div className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div className="flex flex-col md:flex-row gap-4">
+                    <div className="p-3 sm:p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
+                        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-wrap">
                             <div className="flex gap-2 items-center">
-                                <label className="text-sm text-gray-600">Filter by Date:</label>
+                                <label className="text-sm text-gray-600">Date:</label>
                                 <input
                                     type="date"
                                     value={filterDate}
                                     onChange={e => setFilterDate(e.target.value)}
-                                    className="border rounded px-2 py-1 text-sm"
+                                    className="border rounded px-2 py-1 text-sm w-32 sm:w-40"
                                 />
                             </div>
-                            <div className="flex gap-2 items-center">
-                                <label className="text-sm text-gray-600">Filter by Item Type:</label>
+                            <div className="flex items-center">
+                                <label className="text-sm text-gray-600">Item Type:</label>
                                 <select
                                     value={filterItemType}
                                     onChange={e => setFilterItemType(e.target.value)}
-                                    className="border rounded px-2 py-1 text-sm"
+                                    className="border rounded px-2 py-1 text-sm w-20 sm:w-24"
                                 >
                                     <option value="">All</option>
                                     {itemTypes.map(type => (
@@ -731,29 +748,25 @@ const AllStockEntriesTable = forwardRef(({ onRefresh, loading: parentLoading }, 
                                     placeholder="Search by chalan number or series start..."
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
-                                    className="border rounded px-2 py-1 text-sm w-64"
+                                    className="border rounded px-2 py-1 text-sm w-36 sm:w-48 md:w-64 lg:w-80"
                                 />
                             </div>
                         </div>
-                        <div className="flex gap-1 items-center">
+                        <div className="flex gap-2 items-center justify-center lg:justify-end">
                             <button
                                 onClick={handleExportData}
                                 disabled={filteredEntries.length === 0}
-                                className="px-1.5 py-1 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-xs font-medium transition-colors disabled:opacity-50"
+                                className="px-2 sm:px-1.5 py-1 rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 text-xs font-medium transition-colors disabled:opacity-50"
                             >
-                                <svg className="w-2.5 h-2.5 mr-0.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
+                                <Download size={10} className="mr-0.5" />
                                 Export
                             </button>
                             <button
                                 onClick={handleRefresh}
                                 disabled={loading}
-                                className="px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors disabled:opacity-50"
+                                className="px-2 sm:px-1.5 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium transition-colors disabled:opacity-50"
                             >
-                                <svg className="w-2.5 h-2.5 mr-0.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
+                                <RefreshCw size={10} className="mr-1" />
                                 Refresh
                             </button>
                         </div>
