@@ -508,15 +508,13 @@ function TransactionTableView({
                           >
                             {transaction.Notes || "-"}
                           </div>
-                          {isAdmin && (
-                            <button
-                              onClick={() => handleEditNotes(transaction)}
-                              className="opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition-opacity"
-                              title="Edit notes"
-                            >
-                              <Edit3 size={12} />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleEditNotes(transaction)}
+                            className="opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition-opacity"
+                            title="Edit notes"
+                          >
+                            <Edit3 size={12} />
+                          </button>
                         </div>
                       )}
                     </td>
@@ -608,15 +606,13 @@ function TransactionTableView({
               <div className="bg-yellow-50 rounded-lg p-3">
                 <div className="flex items-start justify-between">
                   <span className="text-sm font-medium text-gray-700 mr-2">📝 Notes:</span>
-                  {isAdmin && (
-                    <button
-                      onClick={() => handleEditNotes(transaction)}
-                      className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
-                      title="Edit notes"
-                    >
-                      <Edit3 size={14} />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleEditNotes(transaction)}
+                    className="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
+                    title="Edit notes"
+                  >
+                    <Edit3 size={14} />
+                  </button>
                 </div>
                 {editingNotes === transaction.TransactionID ? (
                   <div className="mt-2 space-y-2">

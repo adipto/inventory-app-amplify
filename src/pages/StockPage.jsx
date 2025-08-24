@@ -1187,7 +1187,11 @@ const handleAllStockRefresh = async () => {
                                  </span>
                                </td>
                                <td className="px-6 py-4 whitespace-nowrap">
-                                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                   item.stockType === 'Retail' 
+                                     ? 'bg-green-100 text-green-800' 
+                                     : 'bg-blue-100 text-blue-800'
+                                 }`}>
                                    {item.stockType}
                                  </span>
                                </td>
@@ -1210,7 +1214,11 @@ const handleAllStockRefresh = async () => {
                                <p className="text-xs text-gray-600 mt-1 break-words">{item.variationName}</p>
                              </div>
                              <div className="ml-2 flex-shrink-0">
-                               <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                 item.stockType === 'Retail' 
+                                   ? 'bg-green-100 text-green-800' 
+                                   : 'bg-blue-100 text-blue-800'
+                               }`}>
                                  {item.stockType}
                                </span>
                              </div>
